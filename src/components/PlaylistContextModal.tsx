@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, Check, FolderPlus, ListPlus, X } from 'lucide-react';
+import { BookOpen, Check, FolderPlus, ListPlus, Pencil, X } from 'lucide-react';
 import { MangaPlaylist, PlaylistMemoryEntry } from '../types';
-import { createPlaylist, getAllPlaylists } from '../services/playlistStorageService';
+import { createPlaylist, getAllPlaylists, savePlaylistMemoryEntry } from '../services/playlistStorageService';
 
 interface PlaylistContextModalProps {
   isOpen: boolean;
@@ -41,6 +41,10 @@ export const PlaylistContextModal: React.FC<PlaylistContextModalProps> = ({
   const [newDescription, setNewDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const [editingEntry, setEditingEntry] = useState<PlaylistMemoryEntry | null>(null);
+  const [editingSourceName, setEditingSourceName] = useState('');
+  const [editingThaiName, setEditingThaiName] = useState('');
+  const [editError, setEditError] = useState('');
 
   const loadPlaylists = async () => {
     const list = await getAllPlaylists();
@@ -76,6 +80,33 @@ export const PlaylistContextModal: React.FC<PlaylistContextModalProps> = ({
 
   const selectedPlaylist = playlists.find(playlist => playlist.id === selectedId) || null;
   const memoryEntries = sortEntries(selectedPlaylist?.memoryEntries || []);
+
+  const handleEditEntry = (entry: PlaylistMemoryEntry) => {
+    setEditingEntry(entry);
+    setEditingSourceName(entry.sourceName);
+    setEditingThaiName(entry.thaiName);
+    setEditError('');
+  };
+
+  const handleSaveEntry = async () => {
+    if (!selectedPlaylist || !editingEntry) return;
+
+    setIsSaving(true);
+    setEditError('');
+    try {
+      await savePlaylistMemoryEntry(selectedPlaylist.id, {
+        ...editingEntry,
+        sourceName: editingSourceName,
+        thaiName: editingThaiName,
+      });
+      await loadPlaylists();
+      setEditingEntry(null);
+    } catch (err: any) {
+      setEditError(err.message || 'ไม่สามารถบันทึกชื่อบริบทนี้ได้');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleCreate = async () => {
     if (!newName.trim()) {
@@ -121,16 +152,16 @@ export const PlaylistContextModal: React.FC<PlaylistContextModalProps> = ({
   };
 
   return (
-    <div className="modal-backdrop" onMouseDown={onClose}>
+    <div className="modal-backdrop playlist-context-backdrop" onMouseDown={onClose}>
       <div
-        className="modal-content"
+        className="modal-content playlist-context-modal"
         onMouseDown={(event) => event.stopPropagation()}
-        style={{ width: 'min(860px, 96vw)', maxWidth: '860px', padding: 0 }}
+        style={{ padding: 0 }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 22px', borderBottom: '1px solid var(--border-subtle)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div className="playlist-context-modal-header">
+          <div className="playlist-context-modal-heading-group">
             <div style={iconBoxStyle}><BookOpen size={19} /></div>
-            <div>
+            <div className="playlist-context-modal-heading">
               <h2 style={{ margin: 0, color: '#ffffff', fontSize: '1.12rem' }}>เลือกบริบทของเรื่อง</h2>
               <p style={{ margin: '2px 0 0', color: 'var(--text-dim)', fontSize: '0.78rem' }}>คำแปลครั้งนี้จะใช้และบันทึกความจำใน Playlist ที่เลือกเท่านั้น</p>
             </div>
@@ -138,8 +169,8 @@ export const PlaylistContextModal: React.FC<PlaylistContextModalProps> = ({
           <button type="button" className="btn-icon" onClick={onClose} title="ปิด"><X size={16} /></button>
         </div>
 
-        <div className="playlist-context-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 0.85fr) minmax(0, 1.4fr)', minHeight: '390px', maxHeight: '68vh' }}>
-          <section style={{ padding: '16px', borderRight: '1px solid var(--border-subtle)', overflowY: 'auto', background: 'rgba(9, 12, 21, 0.35)' }}>
+        <div className="playlist-context-layout">
+          <section className="playlist-context-playlist-panel">
             <button
               type="button"
               className="btn-secondary"
@@ -179,6 +210,7 @@ export const PlaylistContextModal: React.FC<PlaylistContextModalProps> = ({
                   <button
                     key={playlist.id}
                     type="button"
+                    className="playlist-context-playlist-button"
                     onClick={() => { setSelectedId(playlist.id); setIsCreating(false); setError(''); }}
                     style={{
                       width: '100%',
@@ -205,7 +237,7 @@ export const PlaylistContextModal: React.FC<PlaylistContextModalProps> = ({
             )}
           </section>
 
-          <section style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+          <section className="playlist-context-memory-panel">
             <div style={{ padding: '18px 20px 12px', borderBottom: '1px solid var(--border-subtle)' }}>
               {selectedPlaylist ? (
                 <>
@@ -222,17 +254,23 @@ export const PlaylistContextModal: React.FC<PlaylistContextModalProps> = ({
               )}
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+            <div className="playlist-context-memory-list">
               {selectedPlaylist && memoryEntries.length === 0 && (
                 <div style={{ color: 'var(--text-dim)', fontSize: '0.82rem', padding: '38px 14px', textAlign: 'center' }}>เรื่องนี้ยังไม่มีชื่อหรือคำศัพท์ที่บันทึกไว้</div>
               )}
               {memoryEntries.map((entry) => (
-                <div key={entry.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) auto minmax(120px, 1fr)', alignItems: 'center', gap: '9px', padding: '9px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <button
+                  key={entry.id}
+                  type="button"
+                  className="playlist-context-memory-entry"
+                  onClick={() => handleEditEntry(entry)}
+                  title="คลิกเพื่อแก้ไขชื่อภาษาอังกฤษและภาษาไทย"
+                >
                   <span style={{ color: '#ffffff', fontSize: '0.83rem', overflowWrap: 'anywhere' }}>{entry.sourceName}</span>
                   <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>→</span>
                   <span style={{ color: 'var(--accent-cyan)', fontSize: '0.84rem', fontWeight: 700, overflowWrap: 'anywhere' }}>{entry.thaiName}</span>
                   <span style={{ gridColumn: '1 / -1', color: 'var(--text-dim)', fontSize: '0.68rem' }}>{CATEGORY_LABELS[entry.category] || 'อื่น ๆ'}{entry.notes ? ` · ${entry.notes}` : ''}</span>
-                </div>
+                </button>
               ))}
             </div>
           </section>
@@ -240,13 +278,41 @@ export const PlaylistContextModal: React.FC<PlaylistContextModalProps> = ({
 
         {error && <div style={{ color: '#fca5a5', fontSize: '0.8rem', padding: '10px 22px', background: 'rgba(239, 68, 68, 0.1)' }}>{error}</div>}
 
-        <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+        <div className="playlist-context-modal-footer">
           <button type="button" className="btn-secondary" onClick={onClose}>ยกเลิก</button>
           <button type="button" className="btn-primary" onClick={handleConfirm} disabled={!selectedPlaylist || isSaving}>
             <Check size={15} /> ใช้ Playlist นี้และเริ่มแปล
           </button>
         </div>
       </div>
+
+      {editingEntry && (
+        <div className="modal-backdrop playlist-context-edit-backdrop" onMouseDown={() => setEditingEntry(null)}>
+          <div className="modal-content playlist-context-edit-dialog" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="playlist-context-edit-header">
+              <div className="playlist-context-edit-title"><Pencil size={16} /> แก้ไขชื่อบริบท</div>
+              <button type="button" className="btn-icon" onClick={() => setEditingEntry(null)} title="ปิด"><X size={16} /></button>
+            </div>
+            <div className="playlist-context-edit-fields">
+              <label>
+                ชื่อภาษาอังกฤษ / ชื่อต้นฉบับ
+                <input autoFocus className="input-text" value={editingSourceName} onChange={(event) => setEditingSourceName(event.target.value)} />
+              </label>
+              <label>
+                ชื่อภาษาไทย
+                <input className="input-text" value={editingThaiName} onChange={(event) => setEditingThaiName(event.target.value)} />
+              </label>
+              {editError && <p className="playlist-context-edit-error">{editError}</p>}
+            </div>
+            <div className="playlist-context-edit-footer">
+              <button type="button" className="btn-secondary" onClick={() => setEditingEntry(null)}>ยกเลิก</button>
+              <button type="button" className="btn-primary" onClick={handleSaveEntry} disabled={isSaving}>
+                <Check size={15} /> {isSaving ? 'กำลังบันทึก...' : 'บันทึกชื่อ'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

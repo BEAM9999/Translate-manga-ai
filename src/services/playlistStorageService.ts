@@ -51,6 +51,13 @@ function cleanMemoryText(value: unknown): string {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
 }
 
+function normalizeMemoryInstructions(value: unknown): string {
+  if (typeof value !== 'string') return '';
+
+  const instructions = value.replace(/\r\n?/g, '\n');
+  return instructions.trim() ? instructions : '';
+}
+
 function stripMatchingQuotes(value: string): string {
   const trimmed = cleanMemoryText(value);
   if (trimmed.length >= 2) {
@@ -151,10 +158,12 @@ function getMemoryEntriesFromPlaylist(playlist: MangaPlaylist): PlaylistMemoryEn
 }
 
 function hydratePlaylist(playlist: MangaPlaylist): MangaPlaylist {
+  const memoryInstructions = normalizeMemoryInstructions(playlist.memoryInstructions);
+
   return {
     ...playlist,
     memoryEntries: getMemoryEntriesFromPlaylist(playlist),
-    memoryInstructions: cleanMemoryText(playlist.memoryInstructions) || undefined,
+    memoryInstructions: memoryInstructions || undefined,
   };
 }
 
@@ -550,7 +559,7 @@ export async function savePlaylistMemoryInstructions(
   instructions: string
 ): Promise<void> {
   await mutatePlaylist(playlistId, (playlist) => {
-    playlist.memoryInstructions = cleanMemoryText(instructions) || undefined;
+    playlist.memoryInstructions = normalizeMemoryInstructions(instructions) || undefined;
   });
 }
 
@@ -643,7 +652,7 @@ export function formatPlaylistMemoryDirectives(
       return `- [${entry.category}] ${entry.sourceName} => ${entry.thaiName}${note}`;
     })
     .join('\n');
-  const storyInstructions = cleanMemoryText(instructions);
+  const storyInstructions = normalizeMemoryInstructions(instructions);
 
   if (!storyInstructions) return glossary;
   if (!glossary) return `STORY CONTEXT RULES:\n${storyInstructions}`;

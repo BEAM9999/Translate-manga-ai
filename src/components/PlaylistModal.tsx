@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
+const chapterTitleCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 interface PlaylistModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -114,17 +116,13 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
 
   const filteredChapters = (activePlaylist?.chapters || []).filter(c => 
     c.chapterTitle.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  ).sort((left, right) => chapterTitleCollator.compare(left.chapterTitle, right.chapterTitle));
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop playlist-library-backdrop" onClick={onClose}>
       <div 
-        className="modal-content"
+        className="modal-content playlist-library-modal"
         style={{ 
-          maxWidth: '960px', 
-          width: '95%', 
-          height: '82vh', 
-          maxHeight: '720px', 
           padding: '0',
           display: 'flex',
           flexDirection: 'column',
@@ -134,6 +132,7 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
       >
         {/* Header */}
         <div 
+          className="playlist-library-header"
           style={{ 
             display: 'flex', 
             justifyContent: 'space-between', 
@@ -143,7 +142,7 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
             background: 'rgba(15, 20, 34, 0.95)'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="playlist-library-title-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div 
               style={{
                 width: '36px',
@@ -171,7 +170,7 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
               </p>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="playlist-library-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {onOpenBackup && (
               <button
                 className="btn-secondary"
@@ -203,20 +202,17 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
         </div>
 
         {/* Main Body: 2 Columns (Left Playlists / Right Chapters Grid) */}
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div className="playlist-library-layout">
           
           {/* Left Column: Playlist Series List */}
           <div 
+            className="playlist-library-sidebar"
             style={{ 
-              width: '280px', 
-              borderRight: '1px solid rgba(255, 255, 255, 0.08)',
               background: 'rgba(10, 14, 26, 0.8)',
-              display: 'flex',
-              flexDirection: 'column',
             }}
           >
             {/* Create Playlist Button */}
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+            <div className="playlist-library-create-action" style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
               <button
                 className="btn-primary"
                 onClick={() => setIsCreatingPlaylist(!isCreatingPlaylist)}
@@ -228,7 +224,7 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
 
             {/* Create New Playlist Form */}
             {isCreatingPlaylist && (
-              <div style={{ padding: '12px', background: 'rgba(6, 182, 212, 0.05)', borderBottom: '1px solid rgba(6, 182, 212, 0.2)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div className="playlist-library-create-form" style={{ padding: '12px', background: 'rgba(6, 182, 212, 0.05)', borderBottom: '1px solid rgba(6, 182, 212, 0.2)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <input
                   type="text"
                   value={newPlaylistName}
@@ -273,7 +269,7 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
             )}
 
             {/* Playlists List */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+            <div className="playlist-library-playlists">
               {playlists.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--text-dim)', fontSize: '0.78rem' }}>
                   ยังไม่มี Playlist<br />กดปุ่มสร้างด้านบนได้เลย
@@ -284,6 +280,7 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
                   return (
                     <div
                       key={pl.id}
+                      className={`playlist-library-playlist${isSelected ? ' is-selected' : ''}`}
                       onClick={() => setSelectedPlaylistId(pl.id)}
                       style={{
                         display: 'flex',
@@ -324,12 +321,13 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
           </div>
 
           {/* Right Column: Chapters in Selected Playlist */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'rgba(15, 20, 34, 0.5)', overflow: 'hidden' }}>
+          <div className="playlist-library-content">
             
             {activePlaylist ? (
               <>
                 {/* Playlist Top Info Bar & Search */}
                 <div 
+                  className="playlist-library-detail-header"
                   style={{ 
                     padding: '14px 20px', 
                     borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
@@ -339,7 +337,7 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
                     background: 'rgba(15, 20, 34, 0.8)'
                   }}
                 >
-                  <div>
+                  <div className="playlist-library-detail-info">
                     <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ffffff', margin: 0 }}>
                       {activePlaylist.name}
                     </h3>
@@ -349,7 +347,7 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
                   </div>
 
                   {/* Search Chapters */}
-                  <div style={{ position: 'relative', width: '200px' }}>
+                  <div className="playlist-library-search">
                     <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
                     <input
                       type="text"
@@ -371,7 +369,7 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
                 </div>
 
                 {/* Chapters Grid / List */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+                <div className="playlist-library-chapters">
                   {filteredChapters.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-dim)' }}>
                       <FolderOpen size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
@@ -383,7 +381,7 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
                       </p>
                     </div>
                   ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+                    <div className="playlist-library-chapter-grid">
                       {filteredChapters.map((chapter) => {
                         const isEditingThis = editingChapterId === chapter.id;
                         return (
@@ -403,6 +401,7 @@ export const PlaylistModal: React.FC<PlaylistModalProps> = ({
                           >
                             {/* Thumbnail */}
                             <div 
+                              className="playlist-library-thumbnail"
                               style={{ 
                                 height: '160px', 
                                 background: '#0a0f1d', 

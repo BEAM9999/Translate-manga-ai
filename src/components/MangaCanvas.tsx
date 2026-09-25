@@ -24,6 +24,8 @@ import {
   MessageSquarePlus
 } from 'lucide-react';
 
+const INTERNAL_MANGA_PAGE_DRAG_TYPE = 'application/x-c2-sub-auto-ai-page';
+
 interface MangaCanvasProps {
   pages: MangaPage[];
   viewMode: ViewMode;
@@ -80,6 +82,9 @@ export const MangaCanvas: React.FC<MangaCanvasProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetInsertIndexRef = useRef<number>(pages.length);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const touchContextMenuTimerRef = useRef<number | null>(null);
+  const touchContextMenuStartRef = useRef<{ x: number; y: number; pageId: string; pageIndex: number } | null>(null);
+  const suppressLongPressClickRef = useRef(false);
 
   // Active Tool state
   const [croppingPageId, setCroppingPageId] = useState<string | null>(null);
@@ -189,6 +194,14 @@ export const MangaCanvas: React.FC<MangaCanvasProps> = ({
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (Array.from(e.dataTransfer.types).includes(INTERNAL_MANGA_PAGE_DRAG_TYPE)) {
+      e.dataTransfer.dropEffect = 'none';
+      setIsDraggingOver(false);
+      return;
+    }
+
+    e.dataTransfer.dropEffect = 'copy';
     setIsDraggingOver(true);
   };
 
@@ -202,6 +215,9 @@ export const MangaCanvas: React.FC<MangaCanvasProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOver(false);
+
+    if (Array.from(e.dataTransfer.types).includes(INTERNAL_MANGA_PAGE_DRAG_TYPE)) return;
+
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       processFiles(e.dataTransfer.files, pages.length);
     }
@@ -210,6 +226,10 @@ export const MangaCanvas: React.FC<MangaCanvasProps> = ({
   const handleContextMenu = (e: React.MouseEvent, pageId: string, pageIdx: number) => {
     e.preventDefault();
     e.stopPropagation();
+    if (touchContextMenuStartRef.current) {
+      suppressLongPressClickRef.current = true;
+      clearTouchContextMenuTimer();
+    }
     setSelectedPageId(pageId);
     setContextMenu({
       x: e.clientX,
@@ -217,6 +237,50 @@ export const MangaCanvas: React.FC<MangaCanvasProps> = ({
       pageId,
       pageIndex: pageIdx,
     });
+  };
+
+  const clearTouchContextMenuTimer = () => {
+    if (touchContextMenuTimerRef.current !== null) {
+      window.clearTimeout(touchContextMenuTimerRef.current);
+      touchContextMenuTimerRef.current = null;
+    }
+  };
+
+  const handleTouchPointerDown = (event: React.PointerEvent<HTMLImageElement>, pageId: string, pageIndex: number) => {
+    if (event.pointerType !== 'touch') return;
+
+    suppressLongPressClickRef.current = false;
+    touchContextMenuStartRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      pageId,
+      pageIndex,
+    };
+    clearTouchContextMenuTimer();
+    touchContextMenuTimerRef.current = window.setTimeout(() => {
+      const start = touchContextMenuStartRef.current;
+      touchContextMenuTimerRef.current = null;
+      if (!start) return;
+
+      suppressLongPressClickRef.current = true;
+      setSelectedPageId(start.pageId);
+      setContextMenu({ ...start });
+    }, 550);
+  };
+
+  const handleTouchPointerMove = (event: React.PointerEvent<HTMLImageElement>) => {
+    const start = touchContextMenuStartRef.current;
+    if (!start) return;
+
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12) {
+      clearTouchContextMenuTimer();
+      touchContextMenuStartRef.current = null;
+    }
+  };
+
+  const handleTouchPointerEnd = () => {
+    clearTouchContextMenuTimer();
+    touchContextMenuStartRef.current = null;
   };
 
   const handleCopyText = (pageId: string) => {
@@ -461,7 +525,13 @@ export const MangaCanvas: React.FC<MangaCanvasProps> = ({
               <div 
                 className={`manga-page-wrapper ${isSelected ? 'highlight-page' : ''}`}
                 id={`manga-page-${page.id}`}
-                onClick={() => {
+                onClick={(event) => {
+                  if (suppressLongPressClickRef.current) {
+                    suppressLongPressClickRef.current = false;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                  }
                   setSelectedPageId(page.id);
                   if (canvasTool !== 'pointer' && !isCropping && !isScissors) {
                     setDrawingMode({ pageId: page.id, mode: canvasTool });
@@ -574,6 +644,18 @@ export const MangaCanvas: React.FC<MangaCanvasProps> = ({
                   src={page.originalImageUrl}
                   alt={`Manga Page ${pageIdx + 1}`}
                   className="manga-image-elem"
+                  draggable
+                  onPointerDown={(event) => handleTouchPointerDown(event, page.id, pageIdx)}
+                  onPointerMove={handleTouchPointerMove}
+                  onPointerUp={handleTouchPointerEnd}
+                  onPointerCancel={handleTouchPointerEnd}
+                  onDragStart={(event) => {
+                    if (touchContextMenuStartRef.current) {
+                      event.preventDefault();
+                      return;
+                    }
+                    event.dataTransfer.setData(INTERNAL_MANGA_PAGE_DRAG_TYPE, page.id);
+                  }}
                   loading="lazy"
                 />
 

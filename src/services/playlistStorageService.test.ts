@@ -1,11 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PlaylistMemoryEntry } from '../types';
 import {
+  createPlaylist,
   extractPlaylistMemoryEntriesFromInstructions,
   formatPlaylistMemoryDirectives,
+  getPlaylistById,
   getPlaylistMemoryFingerprint,
   mergePlaylistMemoryEntryLists,
   normalizePlaylistMemoryKey,
+  savePlaylistMemoryInstructions,
 } from './playlistStorageService';
 
 const existingEntry: PlaylistMemoryEntry = {
@@ -76,6 +79,36 @@ describe('playlist memory merge rules', () => {
     expect(directives).toContain('Sung Jinwoo => Existing Thai Name');
     expect(directives).toContain('STORY CONTEXT RULES:');
     expect(directives).toContain('Female characters speak politely');
+  });
+
+  it('preserves paragraph breaks and indentation in formatted story context', () => {
+    const instructions = 'World rules:\n\n  Keep this indented detail.\nFinal paragraph.';
+
+    expect(formatPlaylistMemoryDirectives([], instructions)).toBe(
+      `STORY CONTEXT RULES:\n${instructions}`
+    );
+  });
+
+  it('preserves story context formatting when saved and loaded', async () => {
+    const storedValues = new Map<string, string>();
+    vi.stubGlobal('window', { indexedDB: undefined });
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storedValues.get(key) ?? null,
+      setItem: (key: string, value: string) => storedValues.set(key, value),
+    });
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      const playlist = await createPlaylist('Formatting test');
+      const instructions = 'World rules:\n\n  Keep this indented detail.\nFinal paragraph.\n';
+
+      await savePlaylistMemoryInstructions(playlist.id, instructions);
+
+      expect((await getPlaylistById(playlist.id))?.memoryInstructions).toBe(instructions);
+    } finally {
+      warning.mockRestore();
+      vi.unstubAllGlobals();
+    }
   });
 
   it('imports only explicit name mappings from the AI Memory textarea', () => {

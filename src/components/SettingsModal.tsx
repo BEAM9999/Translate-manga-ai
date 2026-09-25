@@ -953,16 +953,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* Section 5: Natural Neural Voice Selector (Microsoft Edge / Google) */}
           <div className="form-group">
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <label className="voice-select-label">
               <Volume2 size={14} color="#10b981" />
               โมเดลเสียงอ่านออกเสียง (Microsoft Edge Natural Voice / Neural TTS)
             </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="voice-select-row">
               <select
-                className="input-text"
+                className="input-text voice-select"
                 value={current.selectedVoiceName || ''}
                 onChange={(e) => setCurrent({ ...current, selectedVoiceName: e.target.value })}
-                style={{ flex: 1 }}
+                title={current.selectedVoiceName || undefined}
               >
                 <option value="">เสียงธรรมชาติเริ่มต้น (Microsoft Edge Natural / Google Neural)</option>
                 {availableVoices
@@ -975,10 +975,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </select>
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn-secondary voice-test-button"
                 onClick={handleTestVoice}
                 disabled={isPlayingTestVoice}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
               >
                 <Volume2 size={13} /> {isPlayingTestVoice ? 'กำลังเล่น...' : 'ทดลองฟังเสียง'}
               </button>
