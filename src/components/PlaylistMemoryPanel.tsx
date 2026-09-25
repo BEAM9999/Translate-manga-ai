@@ -74,6 +74,13 @@ interface InlineEditDraft {
   focusField: 'sourceName' | 'thaiName';
 }
 
+interface SelectionBox {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 function categoryLabel(category: PlaylistMemoryCategory): string {
   return CATEGORIES.find(item => item.value === category)?.label || 'อื่น ๆ';
 }
@@ -110,6 +117,15 @@ export const PlaylistMemoryPanel: React.FC<PlaylistMemoryPanelProps> = ({
   const [error, setError] = useState('');
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isCompactOpen, setIsCompactOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleMobileClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsCompactOpen(false);
+      setIsClosing(false);
+    }, 240);
+  };
   const [isInstructionEditorOpen, setIsInstructionEditorOpen] = useState(false);
   const [instructionDraft, setInstructionDraft] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
@@ -117,6 +133,21 @@ export const PlaylistMemoryPanel: React.FC<PlaylistMemoryPanelProps> = ({
   const [extractionMessage, setExtractionMessage] = useState('');
   const [translationExtractionMessage, setTranslationExtractionMessage] = useState('');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [selectedMemoryIds, setSelectedMemoryIds] = useState<Set<string>>(new Set());
+  const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
+  const memoryPanelRef = useRef<HTMLElement>(null);
+  const memoryListRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    additive: boolean;
+    dragging: boolean;
+  } | null>(null);
+  const suppressEntryClickRef = useRef(false);
+  const memoryPanelActiveRef = useRef(false);
+  const memoryPointerInsideRef = useRef(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(Date.now()), 30 * 1000);
@@ -133,6 +164,10 @@ export const PlaylistMemoryPanel: React.FC<PlaylistMemoryPanelProps> = ({
     setInstructionDraft(playlist?.memoryInstructions || '');
     setExtractionMessage('');
     setTranslationExtractionMessage('');
+    setSelectedMemoryIds(new Set());
+    setSelectionBox(null);
+    memoryPanelActiveRef.current = false;
+    memoryPointerInsideRef.current = false;
   }, [playlist?.id]);
 
   const entries = [...(playlist?.memoryEntries || [])]
@@ -144,6 +179,54 @@ export const PlaylistMemoryPanel: React.FC<PlaylistMemoryPanelProps> = ({
       .some(value => value.toLocaleLowerCase().includes(query));
     return categoryMatches && textMatches;
   });
+
+  useEffect(() => {
+    const validIds = new Set(entries.map(entry => entry.id));
+    setSelectedMemoryIds(current => {
+      const next = new Set([...current].filter(id => validIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [playlist?.memoryEntries]);
+
+  useEffect(() => {
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest('.playlist-memory-entry') || target?.closest('.playlist-memory-selection-actions')) return;
+      setSelectedMemoryIds(new Set());
+      setSelectionBox(null);
+      memoryPanelActiveRef.current = false;
+    };
+
+    window.addEventListener('pointerdown', handleOutsidePointerDown);
+    return () => window.removeEventListener('pointerdown', handleOutsidePointerDown);
+  }, []);
+
+  useEffect(() => {
+    const isTextInput = (target: EventTarget | null) => {
+      const element = target as HTMLElement | null;
+      return element?.tagName === 'INPUT' || element?.tagName === 'TEXTAREA' || element?.tagName === 'SELECT' || element?.isContentEditable;
+    };
+
+    const handleKeyboardSelection = (event: KeyboardEvent) => {
+      if (isTextInput(event.target) || (!memoryPanelActiveRef.current && !memoryPointerInsideRef.current)) return;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        event.stopPropagation();
+        setSelectedMemoryIds(new Set(visibleEntries.map(entry => entry.id)));
+        return;
+      }
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedMemoryIds.size > 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        void handleDeleteSelected();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyboardSelection, true);
+    return () => window.removeEventListener('keydown', handleKeyboardSelection, true);
+  }, [selectedMemoryIds, visibleEntries]);
 
   const refreshPlaylist = async () => {
     if (!playlist) return;
@@ -240,6 +323,155 @@ export const PlaylistMemoryPanel: React.FC<PlaylistMemoryPanelProps> = ({
     }
   };
 
+  const handleDeleteSelected = async () => {
+    if (!playlist || selectedMemoryIds.size === 0) return;
+    const selectedEntries = entries.filter(entry => selectedMemoryIds.has(entry.id));
+    if (selectedEntries.length === 0) return;
+    if (!confirm(`ลบข้อมูลความจำที่เลือก ${selectedEntries.length} รายการออกจาก ${playlist.name} หรือไม่?`)) return;
+
+    setIsSaving(true);
+    setError('');
+    try {
+      for (const entry of selectedEntries) {
+        await deletePlaylistMemoryEntry(playlist.id, entry.id);
+      }
+      setSelectedMemoryIds(new Set());
+      await refreshPlaylist();
+    } catch (err: any) {
+      setError(err.message || 'ไม่สามารถลบข้อมูลที่เลือกได้');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleMemoryListPointerDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    suppressEntryClickRef.current = false;
+    memoryPanelActiveRef.current = true;
+    memoryPointerInsideRef.current = true;
+    const target = event.target as HTMLElement;
+    const entry = target.closest('.playlist-memory-entry');
+    if (target.closest('button, input, textarea, select')) return;
+    if (!entry) setSelectedMemoryIds(new Set());
+
+    dragRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      additive: event.ctrlKey || event.metaKey,
+      dragging: false,
+    };
+  };
+
+  const updateDragPosition = (clientX: number, clientY: number) => {
+    const drag = dragRef.current;
+    const list = memoryListRef.current;
+    if (!drag || !list) return;
+
+    drag.currentX = clientX;
+    drag.currentY = clientY;
+    const moved = Math.hypot(clientX - drag.startX, clientY - drag.startY);
+    if (moved < 4) return;
+    drag.dragging = true;
+    suppressEntryClickRef.current = true;
+    const listRect = list.getBoundingClientRect();
+    if (clientY < listRect.top + 24) list.scrollTop -= 20;
+    if (clientY > listRect.bottom - 24) list.scrollTop += 20;
+    setSelectionBox({
+      left: Math.min(drag.startX, clientX) - listRect.left + list.scrollLeft,
+      top: Math.min(drag.startY, clientY) - listRect.top + list.scrollTop,
+      width: Math.abs(clientX - drag.startX),
+      height: Math.abs(clientY - drag.startY),
+    });
+    updateSelectionFromDrag(drag, clientX, clientY);
+  };
+
+  const handleMemoryListPointerMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    updateDragPosition(event.clientX, event.clientY);
+  };
+
+  const updateSelectionFromDrag = (drag: NonNullable<typeof dragRef.current>, endX: number, endY: number) => {
+    const list = memoryListRef.current;
+    if (!list) return;
+    const selectionRect = {
+      left: Math.min(drag.startX, endX),
+      right: Math.max(drag.startX, endX),
+      top: Math.min(drag.startY, endY),
+      bottom: Math.max(drag.startY, endY),
+    };
+    const selectedInBox = [...list.querySelectorAll<HTMLElement>('[data-memory-entry-id]')]
+      .filter(element => {
+        const rect = element.getBoundingClientRect();
+        return rect.right >= selectionRect.left && rect.left <= selectionRect.right
+          && rect.bottom >= selectionRect.top && rect.top <= selectionRect.bottom;
+      })
+      .map(element => element.dataset.memoryEntryId)
+      .filter((id): id is string => Boolean(id));
+    setSelectedMemoryIds(current => {
+      const next = drag.additive ? new Set(current) : new Set<string>();
+      selectedInBox.forEach(id => next.add(id));
+      return next;
+    });
+  };
+
+  const finalizeMemoryDrag = (clientX: number, clientY: number) => {
+    const drag = dragRef.current;
+    const list = memoryListRef.current;
+    if (!drag || !list) return;
+
+    if (drag.dragging) {
+      updateSelectionFromDrag(drag, clientX, clientY);
+    }
+
+    dragRef.current = null;
+    setSelectionBox(null);
+    suppressEntryClickRef.current = true;
+  };
+
+  const handleMemoryListPointerUp = (event: React.MouseEvent<HTMLDivElement>) => {
+    finalizeMemoryDrag(event.clientX, event.clientY);
+  };
+
+  const handleMemoryListWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag?.dragging) return;
+    event.preventDefault();
+    drag.currentY = Math.max(0, Math.min(window.innerHeight, drag.currentY + event.deltaY));
+    memoryListRef.current?.scrollBy({ top: event.deltaY, behavior: 'auto' });
+    updateSelectionFromDrag(drag, drag.currentX, drag.currentY);
+  };
+
+  useEffect(() => {
+    const handleWindowMouseMove = (event: MouseEvent) => {
+      if (dragRef.current) updateDragPosition(event.clientX, event.clientY);
+    };
+    const handleWindowMouseUp = (event: MouseEvent) => {
+      if (dragRef.current) finalizeMemoryDrag(event.clientX, event.clientY);
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, []);
+
+  const handleEntryClick = (event: React.MouseEvent, entryId: string) => {
+    if (suppressEntryClickRef.current) return;
+    memoryPanelActiveRef.current = true;
+    (event.currentTarget as HTMLElement).focus();
+    const additive = event.ctrlKey || event.metaKey;
+    setSelectedMemoryIds(current => {
+      if (!additive) return new Set([entryId]);
+      const next = new Set(current);
+      if (next.has(entryId)) next.delete(entryId);
+      else next.add(entryId);
+      return next;
+    });
+  };
+
   const handleSaveInstructions = async () => {
     if (!playlist) return;
 
@@ -293,16 +525,25 @@ export const PlaylistMemoryPanel: React.FC<PlaylistMemoryPanelProps> = ({
 
   return (
     <>
+      {(isCompactOpen || isClosing) && (
+        <div 
+          className={`playlist-memory-backdrop ${isClosing ? 'is-closing' : ''}`}
+          onClick={handleMobileClose}
+        />
+      )}
       <button
         type="button"
-        className={`playlist-memory-mobile-launcher ${isCompactOpen ? 'is-hidden' : ''}`}
-        onClick={() => setIsCompactOpen(true)}
+        className={`playlist-memory-mobile-launcher ${(isCompactOpen || isClosing) ? 'is-hidden' : ''}`}
+        onClick={() => {
+          setIsClosing(false);
+          setIsCompactOpen(true);
+        }}
         title="เปิดบริบทและชื่อเรื่อง"
       >
         <Brain size={18} />
       </button>
 
-    <aside className={`playlist-memory-panel ${isCompactOpen ? 'mobile-open' : ''}`}>
+    <aside className={`playlist-memory-panel ${(isCompactOpen && !isClosing) ? 'mobile-open' : ''} ${isClosing ? 'is-closing' : ''}`}>
       <div className="playlist-memory-header">
         <div className="playlist-memory-title">
           <Brain size={18} color="var(--accent-pink)" />
@@ -314,7 +555,7 @@ export const PlaylistMemoryPanel: React.FC<PlaylistMemoryPanelProps> = ({
             <FolderOpen size={15} />
           </button>
         )}
-        <button className="btn-icon memory-mobile-close" type="button" onClick={() => setIsCompactOpen(false)} title="ปิดแผงบริบท">
+        <button className="btn-icon memory-mobile-close" type="button" onClick={handleMobileClose} title="ปิดแผงบริบท">
           <X size={15} />
         </button>
       </div>
@@ -409,6 +650,14 @@ export const PlaylistMemoryPanel: React.FC<PlaylistMemoryPanelProps> = ({
             <button type="button" className="btn-secondary memory-share-button" onClick={() => setIsShareOpen(true)} title="แชร์ความจำของเรื่องนี้ไปยัง Playlist อื่น">
               <Share2 size={15} /> แชร์
             </button>
+            {selectedMemoryIds.size > 0 && (
+              <div className="playlist-memory-selection-actions">
+                <span>{selectedMemoryIds.size} รายการที่เลือก</span>
+                <button type="button" className="btn-icon delete-memory-button" onClick={() => void handleDeleteSelected()} title="ลบรายการที่เลือก">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )}
           </div>
 
           {recentAiImport.length > 0 && (
@@ -449,13 +698,43 @@ export const PlaylistMemoryPanel: React.FC<PlaylistMemoryPanelProps> = ({
 
           {error && <div className="playlist-memory-error">{error}</div>}
 
-          <div className="playlist-memory-list">
+          <div
+            ref={memoryListRef}
+            className="playlist-memory-list"
+            onMouseDown={handleMemoryListPointerDown}
+            onMouseMove={handleMemoryListPointerMove}
+            onMouseUp={handleMemoryListPointerUp}
+            onMouseEnter={() => { memoryPointerInsideRef.current = true; }}
+            onMouseLeave={() => { memoryPointerInsideRef.current = false; }}
+            onWheel={handleMemoryListWheel}
+            onClick={(event) => {
+              if (event.target === event.currentTarget) {
+                setSelectedMemoryIds(new Set());
+                memoryPanelActiveRef.current = true;
+              }
+            }}
+          >
+            {selectionBox && (
+              <div
+                className="playlist-memory-selection-box"
+                style={{
+                  left: selectionBox.left,
+                  top: selectionBox.top,
+                  width: selectionBox.width,
+                  height: selectionBox.height,
+                }}
+              />
+            )}
             {visibleEntries.length === 0 ? (
               <div className="playlist-memory-empty-list">{entries.length === 0 ? 'ยังไม่มีชื่อหรือคำศัพท์ในเรื่องนี้' : 'ไม่พบข้อมูลที่ตรงกับตัวกรอง'}</div>
             ) : visibleEntries.map((entry) => (
               <article
                 key={entry.id}
-                className={`playlist-memory-entry ${recentEntryClass(entry, currentTime)} `}
+                data-memory-entry-id={entry.id}
+                tabIndex={0}
+                className={`playlist-memory-entry ${recentEntryClass(entry, currentTime)} ${selectedMemoryIds.has(entry.id) ? 'is-selected' : ''}`}
+                onClick={(event) => handleEntryClick(event, entry.id)}
+                onFocus={() => { memoryPanelActiveRef.current = true; }}
                 onDoubleClick={() => startInlineEdit(entry, 'sourceName')}
                 title="ดับเบิลคลิกที่แถวเพื่อแก้ไขชื่อ แล้วคลิกที่อื่นหรือกด Enter เพื่อบันทึก"
               >

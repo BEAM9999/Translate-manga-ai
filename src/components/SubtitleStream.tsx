@@ -48,7 +48,21 @@ export const SubtitleStream: React.FC<SubtitleStreamProps> = ({
   preferredVoiceName,
 }) => {
   const [viewLayout, setViewLayout] = useState<'aligned' | 'stream'>('stream');
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 900);
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleClose = () => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 1024) {
+      setIsClosing(true);
+      setTimeout(() => {
+        setIsCollapsed(true);
+        setIsClosing(false);
+      }, 220);
+    } else {
+      setIsCollapsed(true);
+    }
+  };
+
   const [speakingBubbleId, setSpeakingBubbleId] = useState<string | null>(null);
   const [editingBubbleId, setEditingBubbleId] = useState<string | null>(null);
   const [editTranslatedText, setEditTranslatedText] = useState('');
@@ -187,7 +201,12 @@ export const SubtitleStream: React.FC<SubtitleStreamProps> = ({
   }
 
   return (
-    <aside className="subtitle-timeline-panel">
+    <>
+      <div 
+        className={`mobile-subtitle-backdrop ${isClosing ? 'is-closing' : ''}`}
+        onClick={handleClose}
+      />
+      <aside className={`subtitle-timeline-panel ${isClosing ? 'is-closing' : ''}`}>
       {/* Header */}
       <div className="subtitle-panel-header">
         <div className="subtitle-header-title">
@@ -218,7 +237,7 @@ export const SubtitleStream: React.FC<SubtitleStreamProps> = ({
           </button>
           <button
             className="btn-icon subtitle-collapse-btn"
-            onClick={() => setIsCollapsed(true)}
+            onClick={handleClose}
             title="ย่อแถบซับไตเติ้ล เพื่อขยายพื้นที่หน้าการ์ตูน"
             style={{ marginLeft: '4px' }}
           >
@@ -613,5 +632,6 @@ export const SubtitleStream: React.FC<SubtitleStreamProps> = ({
         </div>
       )}
     </aside>
+    </>
   );
 };

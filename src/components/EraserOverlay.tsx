@@ -6,6 +6,7 @@ import { applyDrawingToImage } from '../utils/imageInpainter';
 interface EraserOverlayProps {
   page: MangaPage;
   initialMode?: 'eraser' | 'paint';
+  commitOnExit?: boolean;
   onApply: (pageId: string, newImageUrl: string, mode: 'eraser' | 'paint') => void;
   onCancel: () => void;
 }
@@ -13,6 +14,7 @@ interface EraserOverlayProps {
 export const EraserOverlay: React.FC<EraserOverlayProps> = ({
   page,
   initialMode = 'eraser',
+  commitOnExit = false,
   onApply,
   onCancel,
 }) => {
@@ -192,6 +194,13 @@ export const EraserOverlay: React.FC<EraserOverlayProps> = ({
       setIsApplying(false);
     }
   };
+
+  // Preserve unfinished strokes when the user switches back to the pointer tool.
+  useEffect(() => {
+    if (commitOnExit && !isApplying) {
+      void handleApply();
+    }
+  }, [commitOnExit]);
 
   // Eyedropper tool
   const handleEyedropper = async () => {

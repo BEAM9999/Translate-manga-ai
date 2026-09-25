@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run build && vite preview",
     "build": "tsc && vite build",
     "build:pages": "npm run build && node scripts/publish-pages.mjs",
     "test": "vitest run",

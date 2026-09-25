@@ -3,6 +3,7 @@ import { AppSettings, GeminiModelId, TranslationContextId, AiProvider, OpenRoute
 import { GEMINI_MODELS } from '../data/models';
 import { TRANSLATION_CONTEXTS } from '../data/translationContexts';
 import { clearOcrCache, getCacheStats } from '../services/cacheService';
+import { AppDataStats, clearAllAppData, getAppDataStats } from '../services/appDataService';
 import { tts } from '../services/ttsService';
 import { parseSmartKeysAndModels, removeModelFromSmartText } from '../utils/smartKeyParser';
 import { checkAllOpenRouterModelsHealth } from '../services/modelCheckerService';
@@ -59,6 +60,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [showKey, setShowKey] = useState(false);
   const [revealedKeyIds, setRevealedKeyIds] = useState<Record<string, boolean>>({});
   const [cacheInfo, setCacheInfo] = useState(getCacheStats());
+  const [appDataInfo, setAppDataInfo] = useState<AppDataStats | null>(null);
+  const [isResettingAppData, setIsResettingAppData] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [isPlayingTestVoice, setIsPlayingTestVoice] = useState(false);
@@ -74,6 +77,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (isOpen) {
       setCurrent({ ...settings });
       setCacheInfo(getCacheStats());
+      getAppDataStats().then(setAppDataInfo);
       setSmartPasteText(settings.rawSmartPasteText || '');
       setSmartImportResult(null);
 
@@ -102,8 +106,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (confirm('คุณต้องการล้างแคชคำแปลและข้อมูล OCR ทั้งหมดหรือไม่?')) {
       clearOcrCache();
       setCacheInfo(getCacheStats());
+      getAppDataStats().then(setAppDataInfo);
       showToast('ล้างแคชคำแปลทั้งหมดเรียบร้อยแล้ว');
     }
+  };
+
+  const handleResetAppData = async () => {
+    if (!confirm('ลบการตั้งค่า แคช หน้ามังงะ และ Playlist ทั้งหมดของ C2 Sub Auto AI หรือไม่? การลบนี้ย้อนกลับไม่ได้ และจะลบเฉพาะข้อมูลเว็บนี้ ไม่ลบไฟล์ Windows')) {
+      return;
+    }
+
+    setIsResettingAppData(true);
+    try {
+      await clearAllAppData();
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to reset app data:', error);
+      showToast('ลบข้อมูลไม่สำเร็จ อาจมีแท็บอื่นกำลังใช้งานฐานข้อมูลนี้');
+      setIsResettingAppData(false);
+    }
+  };
+
+  const formatStorageUsage = (bytes: number | null) => {
+    if (bytes === null) return 'ประเมินไม่ได้';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
   };
 
   const handleTestVoice = () => {
@@ -976,22 +1005,63 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 border: '1px solid var(--border-subtle)',
               }}
             >
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: '0.84rem', fontWeight: 600 }}>
-                  แคชที่บันทึกไว้ในเครื่อง: {cacheInfo.count} หน้า ({cacheInfo.sizeKb} KB)
+                  แคช OCR: {cacheInfo.count} รายการ ({cacheInfo.sizeKb} KB)
                 </div>
                 <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)' }}>
-                  ช่วยให้เปิดหน้ามังงะเดิมได้ทันทีโดยไม่ต้องแปลซ้ำและไม่เสีย Token
+                  ใช้ผลแปลเดิมซ้ำได้โดยไม่ต้องเรียก AI ใหม่
                 </div>
               </div>
               <button
                 type="button"
                 className="btn-secondary"
                 onClick={handleClearCache}
-                style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
+                style={{ color: '#facc15', borderColor: 'rgba(250,204,21,0.3)', flexShrink: 0 }}
               >
                 <Trash2 size={13} /> ล้างแคช
               </button>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+                marginTop: '8px',
+                padding: '10px 14px',
+                background: 'rgba(239,68,68,0.045)',
+                border: '1px solid rgba(239,68,68,0.2)',
+                borderRadius: '8px',
+              }}
+            >
+              <div style={{ minWidth: 0, flex: '1 1 320px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '0.84rem', fontWeight: 600 }}>
+                  <HardDriveDownload size={14} color="#f87171" />
+                  ข้อมูลทั้งหมดที่จะลบ
+                  <span style={{ color: '#fca5a5', whiteSpace: 'nowrap' }}>
+                    {formatStorageUsage(appDataInfo?.totalBytes ?? null)} โดยประมาณ
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginTop: '3px' }}>
+                  {appDataInfo
+                    ? `${appDataInfo.pageCount} หน้า/รูป · ${appDataInfo.bubbleCount} ข้อความ · ${appDataInfo.playlistCount} Playlist · ${appDataInfo.chapterCount} ตอน · ${appDataInfo.cacheEntryCount} แคช · ${appDataInfo.settingsCount} ชุดตั้งค่า`
+                    : 'กำลังตรวจสอบข้อมูลที่จัดเก็บ...'}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleResetAppData}
+                disabled={isResettingAppData}
+                style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)', flexShrink: 0 }}
+              >
+                <Trash2 size={13} /> {isResettingAppData ? 'กำลังลบ...' : 'ลบข้อมูลทั้งหมด'}
+              </button>
+            </div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '6px' }}>
+              ขนาดคำนวณจากข้อมูลของแอปใน localStorage และ IndexedDB เป็นค่าประมาณ ไม่รวมพื้นที่ของเว็บหรือไฟล์ Windows อื่น
             </div>
           </div>
 

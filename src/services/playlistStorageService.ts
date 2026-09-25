@@ -236,7 +236,9 @@ function openPlaylistDB(): Promise<IDBDatabase> {
     };
 
     request.onsuccess = (event) => {
-      resolve((event.target as IDBOpenDBRequest).result);
+      const database = (event.target as IDBOpenDBRequest).result;
+      database.onversionchange = () => database.close();
+      resolve(database);
     };
 
     request.onerror = (event) => {

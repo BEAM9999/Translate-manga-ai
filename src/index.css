@@ -514,9 +514,46 @@ body {
   flex-shrink: 0;
 }
 
-.memory-mobile-close,
+.memory-mobile-close {
+  display: none;
+}
+
 .playlist-memory-mobile-launcher {
   display: none;
+  position: fixed;
+  bottom: 58px;
+  left: 10px;
+  z-index: 80;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(236, 72, 153, 0.6);
+  border-radius: 50%;
+  color: #f9a8d4;
+  background: rgba(15, 20, 34, 0.94);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.playlist-memory-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 89;
+  cursor: pointer;
+  animation: backdropFadeIn 0.24s ease-out forwards;
+}
+
+.playlist-memory-backdrop.is-closing {
+  animation: backdropFadeOut 0.22s ease-in forwards !important;
+}
+
+.playlist-memory-panel.mobile-open .memory-mobile-close {
+  display: flex !important;
 }
 
 .playlist-memory-context {
@@ -872,11 +909,14 @@ body {
 }
 
 .playlist-memory-list {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0 12px 14px;
+  user-select: none;
+  cursor: default;
 }
 
 .playlist-memory-entry {
@@ -899,6 +939,20 @@ body {
 
 .playlist-memory-entry:hover {
   background: rgba(255, 255, 255, 0.035);
+}
+
+.playlist-memory-entry.is-selected {
+  background: rgba(6, 182, 212, 0.16);
+  border-left-color: var(--accent-cyan);
+  box-shadow: inset 0 0 0 1px rgba(103, 232, 249, 0.24);
+}
+
+.playlist-memory-selection-box {
+  position: absolute;
+  z-index: 10;
+  pointer-events: none;
+  border: 1px solid rgba(103, 232, 249, 0.9);
+  background: rgba(6, 182, 212, 0.14);
 }
 
 .playlist-memory-entry-top,
@@ -1007,6 +1061,21 @@ body {
 
 .delete-memory-button {
   color: #f87171;
+}
+
+.playlist-memory-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--accent-cyan);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.playlist-memory-selection-actions .btn-icon {
+  width: 26px;
+  height: 26px;
 }
 
 .playlist-memory-empty,
@@ -1655,6 +1724,71 @@ body {
   to { transform: translateY(0); opacity: 1; }
 }
 
+/* =============================================
+   MOBILE & TABLET DRAWER ANIMATIONS
+   ============================================= */
+@keyframes drawerSlideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0.85;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes drawerSlideOutRight {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0.85;
+  }
+}
+
+@keyframes drawerSlideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0.85;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes drawerSlideOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0.85;
+  }
+}
+
+@keyframes backdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes backdropFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 @media (max-width: 1280px) {
   .header-bar {
     gap: 8px;
@@ -1729,71 +1863,352 @@ body {
   }
 }
 
-@media (max-width: 900px) {
+/* =============================================
+   TABLET RESPONSIVE (641px - 1024px)
+   ============================================= */
+@media (min-width: 641px) and (max-width: 1024px) {
+  /* --- Header: Clean Single-Row Unified Layout --- */
   .header-bar {
-    justify-content: flex-start;
-    overflow-x: auto;
-    scrollbar-width: none;
+    height: 54px;
+    min-height: 54px;
+    flex-wrap: nowrap !important;
+    gap: 6px;
+    padding: 0 10px;
+    overflow: visible;
   }
 
-  .header-bar::-webkit-scrollbar {
+  .header-brand {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .header-logo-img {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+  }
+
+  .app-title-group {
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  .header-title {
+    font-size: 0.86rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .header-studio-badge,
+  .header-subtitle {
+    display: none !important;
+  }
+
+  .header-center-section {
+    order: unset !important;
+    flex: 0 1 auto;
+    justify-content: center;
+    gap: 5px;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .header-right-section {
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    gap: 3px;
+  }
+
+  .provider-switcher-container {
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .provider-tab-btn {
+    min-height: 30px;
+    padding: 0 6px;
+    font-size: 0.7rem;
+  }
+
+  .provider-tab-btn span {
+    display: none !important;
+  }
+
+  .header-model-selector {
+    flex: 0 1 120px;
+    min-width: 80px;
+  }
+
+  .header-model-selector .model-select {
+    height: 30px;
+    padding: 0 18px 0 6px;
+    font-size: 0.74rem;
+  }
+
+  .view-mode-tabs {
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .view-mode-btn {
+    padding: 4px 6px;
+    font-size: 0.74rem;
+    min-height: 30px;
+  }
+
+  .view-mode-label {
+    display: none !important;
+  }
+
+  .header-btn,
+  .header-btn-primary {
+    padding: 5px 6px;
+    font-size: 0.74rem;
+    min-height: 30px;
+  }
+
+  .header-btn-label,
+  .header-btn-label-full {
+    display: none !important;
+  }
+
+  .header-btn-label-short {
+    display: inline !important;
+  }
+
+  .btn-primary.header-btn-primary {
+    padding: 5px 8px;
+    font-size: 0.76rem;
+  }
+
+  /* --- Main workspace: vertical flex --- */
+  .main-workspace {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    height: calc(100vh - 56px);
+  }
+
+  /* --- Left toolbar → horizontal bottom bar --- */
+  .left-toolbar {
+    order: 3;
+    width: 100%;
+    height: 52px;
+    flex-direction: row;
+    padding: 0 8px;
+    gap: 4px;
+    border-right: none;
+    border-top: 1px solid var(--border-subtle);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    flex-shrink: 0;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .left-toolbar::-webkit-scrollbar {
     display: none;
   }
 
-  .header-center-section,
-  .header-right-section {
-    flex: 0 0 auto;
+  .tool-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    flex-shrink: 0;
   }
 
-  .main-workspace {
-    overflow-x: auto;
+  /* Hide vertical separator lines in horizontal toolbar */
+  .left-toolbar > div[style*="width: 32px"][style*="height: 1px"] {
+    width: 1px !important;
+    height: 28px !important;
+    flex-shrink: 0;
   }
 
+  /* Hide the page counter at bottom of sidebar (it's now at the end of the row) */
+  .left-toolbar > div[style*="marginTop: auto"] {
+    margin-top: 0 !important;
+    flex-direction: row !important;
+  }
+
+  /* --- Manga canvas fills the middle --- */
   .manga-canvas-container {
-    min-width: 540px;
+    min-width: 0;
+    flex: 1;
+    padding: 16px 10px 20px;
+    order: 1;
   }
 
-  .playlist-memory-panel {
+  .chapter-strip {
+    max-width: 100%;
+  }
+
+  /* --- Right subtitle panel → slide-in drawer from right --- */
+  .subtitle-timeline-panel {
     position: fixed;
-    top: 64px;
+    top: 0;
+    right: 0;
     bottom: 0;
-    left: 0;
-    width: min(340px, calc(100vw - 34px));
-    transform: translateX(-105%);
-    transition: transform 0.2s ease;
-    box-shadow: 14px 0 36px rgba(0, 0, 0, 0.58);
-    z-index: 90;
+    width: min(340px, 86vw);
+    min-width: 0;
+    transform: translateX(0);
+    box-shadow: -10px 0 40px rgba(0, 0, 0, 0.65);
+    z-index: 95;
+    animation: drawerSlideInRight 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform;
+  }
+
+  .subtitle-timeline-panel.is-closing {
+    animation: drawerSlideOutRight 0.22s cubic-bezier(0.4, 0, 1, 1) forwards !important;
+  }
+
+  .subtitle-panel-header {
+    min-height: auto;
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .subtitle-header-title {
+    font-size: 0.86rem;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .subtitle-panel-header > div:last-child {
+    flex: 0 0 auto;
+    gap: 6px;
+  }
+
+  /* Collapsed bar → fixed toggle button at bottom-right */
+  .subtitle-collapsed-bar {
+    position: fixed;
+    bottom: 58px;
+    right: 10px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    justify-content: center;
+    align-items: center;
+    background: rgba(15, 20, 34, 0.94);
+    border: 1px solid var(--accent-cyan);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 12px rgba(6, 182, 212, 0.4);
+    z-index: 85;
+    cursor: pointer;
+  }
+
+  .subtitle-collapsed-bar .vertical-panel-label {
+    display: none !important;
+  }
+
+  .subtitle-collapsed-bar .subtitle-count-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--accent-cyan);
+    color: #0b101b;
+    font-size: 0.65rem;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  }
+
+  /* --- Playlist Memory Panel: slide-in from left --- */
+  .playlist-memory-panel {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: min(340px, calc(100vw - 34px)) !important;
+    transform: translateX(-105%) !important;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease !important;
+    box-shadow: 14px 0 36px rgba(0, 0, 0, 0.58) !important;
+    z-index: 90 !important;
+    will-change: transform;
   }
 
   .playlist-memory-panel.mobile-open {
-    transform: translateX(0);
+    transform: translateX(0) !important;
   }
 
   .playlist-memory-mobile-launcher {
     position: fixed;
-    top: 74px;
-    left: 8px;
+    bottom: 62px;
+    left: 10px;
     z-index: 80;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border: 1px solid rgba(236, 72, 153, 0.6);
-    border-radius: 6px;
+    border-radius: 50%;
     color: #f9a8d4;
     background: rgba(15, 20, 34, 0.94);
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   }
 
   .playlist-memory-mobile-launcher.is-hidden {
-    display: none;
+    display: none !important;
   }
 
   .memory-mobile-close {
-    display: flex;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
   }
 
+  .playlist-memory-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    z-index: 89;
+  }
+
+  /* --- Modals: more mobile-friendly --- */
+  .modal-content {
+    max-width: 95vw;
+    max-height: 92vh;
+    border-radius: var(--radius-md);
+  }
+
+  .modal-backdrop {
+    padding: 10px;
+  }
+
+  .modal-header {
+    padding: 14px 16px;
+  }
+
+  .modal-body {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .modal-footer {
+    padding: 12px 16px;
+  }
+
+  .modal-header h2 {
+    font-size: 1rem;
+  }
+
+  /* --- Playlist context layout --- */
   .playlist-context-layout {
     grid-template-columns: 1fr !important;
     max-height: 70vh !important;
@@ -1805,19 +2220,546 @@ body {
     border-bottom: 1px solid var(--border-subtle);
     max-height: 240px;
   }
+
+  /* --- Toast position for mobile --- */
+  .toast-container {
+    bottom: 64px;
+    right: 12px;
+    left: 12px;
+  }
+
+  .toast {
+    font-size: 0.8rem;
+    padding: 10px 14px;
+  }
+
+  /* --- Memory editor expanded → nearly full screen on tablet --- */
+  .memory-editor-expanded {
+    width: min(980px, 98vw);
+    height: min(780px, 92vh);
+  }
 }
 
+/* =============================================
+   MOBILE RESPONSIVE (max-width: 640px)
+   ============================================= */
 @media (max-width: 640px) {
+  /* --- Header: Balanced 2-Row Stacked Layout --- */
   .header-bar {
-    min-width: max-content;
+    height: auto;
+    min-height: 80px;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 10px;
+    overflow: visible;
   }
 
+  /* Row 1 Left: Brand Logo + Clean Title */
+  .header-brand {
+    order: 1;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .header-logo-img {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+  }
+
+  .app-title-group {
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  .header-title {
+    font-size: 0.84rem;
+    font-weight: 700;
+  }
+
+  .header-studio-badge,
+  .header-subtitle {
+    display: none !important;
+  }
+
+  /* Row 1 Right: Action Buttons */
+  .header-right-section {
+    order: 2;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+
+  .header-btn,
+  .header-btn-primary {
+    padding: 5px 6px;
+    font-size: 0.72rem;
+    min-height: 32px;
+  }
+
+  .header-btn-label,
+  .header-btn-label-full,
+  .header-btn-label-short {
+    display: none !important;
+  }
+
+  .btn-primary.header-btn-primary {
+    padding: 5px 8px;
+  }
+
+  /* Row 2: Full-Width Dock (AI Engine + View Mode Switcher) */
+  .header-center-section {
+    order: 3;
+    flex: 1 1 100%;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    overflow: visible;
+  }
+
+  .provider-switcher-container {
+    flex: 0 0 auto;
+    padding: 2px;
+    border: none;
+    background: transparent;
+    gap: 2px;
+  }
+
+  .provider-tab-btn {
+    min-height: 28px;
+    padding: 0 6px;
+    font-size: 0.68rem;
+  }
+
+  .provider-tab-btn span {
+    display: none !important;
+  }
+
+  .header-model-selector {
+    flex: 1 1 auto;
+    min-width: 80px;
+    max-width: 160px;
+  }
+
+  .header-model-selector .model-select {
+    height: 28px;
+    padding: 0 18px 0 6px;
+    font-size: 0.72rem;
+    width: 100%;
+  }
+
+  .view-mode-tabs {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 2px;
+    gap: 2px;
+    border: none;
+    background: transparent;
+  }
+
+  .view-mode-btn {
+    padding: 4px 6px;
+    font-size: 0.7rem;
+    min-height: 28px;
+  }
+
+  .view-mode-label {
+    display: none !important;
+  }
+
+  /* --- Main workspace: vertical, no horizontal scroll --- */
   .main-workspace {
-    min-width: max-content;
+    flex-direction: column;
+    min-width: 0;
+    overflow-x: hidden;
+    height: calc(100vh - 86px);
   }
 
+  /* --- Left toolbar → bottom horizontal bar (compact) --- */
+  .left-toolbar {
+    order: 3;
+    width: 100%;
+    height: 46px;
+    flex-direction: row;
+    padding: 0 6px;
+    gap: 2px;
+    border-right: none;
+    border-top: 1px solid var(--border-subtle);
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-shrink: 0;
+    justify-content: flex-start;
+    align-items: center;
+  }
+
+  .tool-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    flex-shrink: 0;
+    border-radius: var(--radius-sm);
+  }
+
+  .tool-btn.add-page-btn {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+  }
+
+  /* --- Canvas full width --- */
+  .manga-canvas-container {
+    min-width: 0;
+    flex: 1;
+    padding: 10px 6px 16px;
+    order: 1;
+  }
+
+  .chapter-strip {
+    max-width: 100%;
+  }
+
+  .manga-page-header {
+    top: 6px;
+    left: 6px;
+    right: 6px;
+  }
+
+  .page-badge {
+    font-size: 0.68rem;
+    padding: 3px 7px;
+  }
+
+  .page-action-btn {
+    padding: 3px 5px;
+    font-size: 0.68rem;
+  }
+
+  /* --- Right subtitle panel: slide-in drawer --- */
   .subtitle-timeline-panel {
-    width: 280px;
-    min-width: 240px;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 92vw);
+    min-width: 0;
+    transform: translateX(0);
+    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.7);
+    z-index: 95;
+    animation: drawerSlideInRight 0.26s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform;
+  }
+
+  .subtitle-timeline-panel.is-closing {
+    animation: drawerSlideOutRight 0.22s cubic-bezier(0.4, 0, 1, 1) forwards !important;
+  }
+
+  .subtitle-panel-header {
+    min-height: 54px;
+    padding: 8px 10px;
+  }
+
+  .subtitle-header-title {
+    font-size: 0.82rem;
+  }
+
+  .subtitle-stream-scrollable {
+    padding: 10px 8px;
+    gap: 8px;
+  }
+
+  .subtitle-card {
+    padding: 10px 10px;
+  }
+
+  .card-translated-text {
+    font-size: 0.85rem;
+  }
+
+  .card-original-text {
+    font-size: 0.72rem;
+  }
+
+  /* --- Collapsed bar → floating action button --- */
+  .subtitle-collapsed-bar {
+    position: fixed;
+    bottom: 52px;
+    right: 8px;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    justify-content: center;
+    align-items: center;
+    background: rgba(15, 20, 34, 0.94);
+    border: 1px solid var(--accent-cyan);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 10px rgba(6, 182, 212, 0.35);
+    z-index: 85;
+    cursor: pointer;
+  }
+
+  /* --- Playlist memory → slide-in from left on mobile --- */
+  .playlist-memory-panel {
+    position: fixed !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: min(320px, 90vw) !important;
+    transform: translateX(-105%) !important;
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.28s ease !important;
+    box-shadow: 14px 0 36px rgba(0, 0, 0, 0.58) !important;
+    z-index: 90 !important;
+    will-change: transform;
+  }
+
+  .playlist-memory-panel.mobile-open {
+    transform: translateX(0) !important;
+  }
+
+  .playlist-memory-mobile-launcher {
+    bottom: 52px;
+    left: 8px;
+    width: 42px;
+    height: 42px;
+    display: flex !important;
+  }
+
+  .playlist-memory-mobile-launcher.is-hidden {
+    display: none !important;
+  }
+
+  .memory-mobile-close {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .playlist-memory-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+    z-index: 89;
+  }
+
+  /* --- Modals: elegant mobile sheets --- */
+  .modal-backdrop {
+    padding: 8px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-content {
+    max-width: 96vw !important;
+    width: 96vw !important;
+    max-height: 92vh !important;
+    height: auto !important;
+    border-radius: 14px !important;
+    animation: modalSlideUp 0.25s ease;
+  }
+
+  @keyframes modalSlideUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .modal-header {
+    padding: 12px 14px;
+  }
+
+  .modal-header h2 {
+    font-size: 0.95rem;
+  }
+
+  .modal-body {
+    padding: 12px 14px;
+    gap: 12px;
+  }
+
+  .modal-footer {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  .modal-footer .btn-primary,
+  .modal-footer .btn-secondary {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .form-group label {
+    font-size: 0.8rem;
+  }
+
+  .input-text {
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    min-height: 44px;
+  }
+
+  /* --- Memory editor expanded → full screen on mobile --- */
+  .memory-editor-expanded {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .memory-editor-expanded-header,
+  .memory-editor-expanded-footer {
+    padding: 12px 14px;
+  }
+
+  .memory-editor-expanded-header h2 {
+    font-size: 0.95rem;
+  }
+
+  .memory-editor-expanded > textarea {
+    margin: 10px 14px;
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+
+  /* --- Toast: full width on mobile --- */
+  .toast-container {
+    bottom: 56px;
+    right: 8px;
+    left: 8px;
+  }
+
+  .toast {
+    font-size: 0.78rem;
+    padding: 10px 12px;
+  }
+
+  /* --- Playlist-memory sub-sections compact --- */
+  .playlist-memory-header {
+    min-height: 48px;
+    padding: 10px 12px;
+  }
+
+  .playlist-memory-title {
+    font-size: 0.85rem;
+  }
+
+  .playlist-memory-controls {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 8px 10px 6px;
+  }
+
+  .playlist-memory-actions {
+    flex-wrap: wrap;
+    padding: 0 10px 8px;
+  }
+
+  .memory-action-button,
+  .memory-share-button {
+    font-size: 0.7rem;
+    padding: 6px;
+    min-height: 36px;
+  }
+
+  /* --- Add-page divider compact --- */
+  .add-divider-btn {
+    font-size: 0.72rem;
+    padding: 5px 12px;
+  }
+}
+
+/* =============================================
+   MOBILE SUBTITLE DRAWER OVERLAY
+   (backdrop when subtitle panel is open on mobile & tablet)
+   ============================================= */
+.mobile-subtitle-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 94;
+  cursor: pointer;
+  animation: backdropFadeIn 0.24s ease-out forwards;
+}
+
+.mobile-subtitle-backdrop.is-closing {
+  animation: backdropFadeOut 0.22s ease-in forwards !important;
+}
+
+@media (max-width: 1024px) {
+  .mobile-subtitle-backdrop {
+    display: block !important;
+  }
+}
+
+/* =============================================
+   TOUCH-FRIENDLY IMPROVEMENTS
+   ============================================= */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger tap targets for touch devices */
+  .tool-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .btn-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .view-mode-btn {
+    min-height: 36px;
+  }
+
+  .header-btn,
+  .header-btn-primary {
+    min-height: 36px;
+  }
+
+  .provider-tab-btn {
+    min-height: 36px;
+  }
+
+  /* Disable hover effects on touch (they'd be sticky) */
+  .subtitle-card:hover {
+    transform: none;
+  }
+
+  .manga-bubble-overlay:hover {
+    transform: none;
+  }
+
+  .page-divider-add {
+    opacity: 0.7;
+  }
+
+  /* Larger scrollbar / no scrollbar on touch */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  /* Subtitle card active state instead of hover */
+  .subtitle-card:active {
+    border-color: var(--accent-cyan);
+    background: #202b48;
+  }
+
+  /* Prevent double-tap zoom on buttons */
+  button {
+    touch-action: manipulation;
   }
 }

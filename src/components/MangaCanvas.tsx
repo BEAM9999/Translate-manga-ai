@@ -123,10 +123,6 @@ export const MangaCanvas: React.FC<MangaCanvasProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedPageId, croppingPageId, scissorsPageId, drawingMode, onDeletePage]);
 
-  useEffect(() => {
-    if (canvasTool === 'pointer') setDrawingMode(null);
-  }, [canvasTool]);
-
   const handleTriggerAddPage = (insertIndex: number) => {
     targetInsertIndexRef.current = insertIndex;
     if (fileInputRef.current) {
@@ -610,6 +606,7 @@ export const MangaCanvas: React.FC<MangaCanvasProps> = ({
                   <EraserOverlay
                     page={page}
                     initialMode={drawingMode.mode}
+                    commitOnExit={canvasTool === 'pointer'}
                     onApply={(pId, newImageUrl, mode) => {
                       if (onApplyDrawing) onApplyDrawing(pId, newImageUrl, mode);
                       setDrawingMode(null);
