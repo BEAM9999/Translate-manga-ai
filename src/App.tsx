@@ -170,6 +170,7 @@ export const App: React.FC = () => {
   const [isSaveToPlaylistModalOpen, setIsSaveToPlaylistModalOpen] = useState(false);
   const [isPlaylistContextModalOpen, setIsPlaylistContextModalOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
+  const [backupInitialTab, setBackupInitialTab] = useState<'export' | 'import' | 'cloud'>('export');
   const [pendingPlaylistAction, setPendingPlaylistAction] = useState<PendingPlaylistAction>(null);
   const [activeChapterTitle, setActiveChapterTitle] = useState<string>('');
   const [playlistCount, setPlaylistCount] = useState<number>(0);
@@ -1347,6 +1348,10 @@ export const App: React.FC = () => {
         apiKey={settings.apiKey}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenExport={() => setIsExportOpen(true)}
+        onOpenBackup={(tab = 'export') => {
+          setBackupInitialTab(tab);
+          setIsBackupOpen(true);
+        }}
         onOpenPlaylist={() => setIsPlaylistModalOpen(true)}
         onOpenSaveToPlaylist={() => setIsSaveToPlaylistModalOpen(true)}
         onGoToHome={handleGoToHome}
@@ -1506,13 +1511,17 @@ export const App: React.FC = () => {
         settings={settings}
         activePlaylistName={activeContextPlaylist?.name}
         onSaveSettings={handleSaveSettings}
-        onOpenBackup={() => setIsBackupOpen(true)}
+        onOpenBackup={() => {
+          setBackupInitialTab('export');
+          setIsBackupOpen(true);
+        }}
       />
 
       {/* Full Backup & Restore Modal */}
       <BackupModal
         isOpen={isBackupOpen}
         onClose={() => setIsBackupOpen(false)}
+        initialTab={backupInitialTab}
         currentSettings={settings}
         onSettingsRestored={(newSettings) => {
           setSettings(newSettings);
