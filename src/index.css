@@ -1284,6 +1284,38 @@ body {
   animation: pulseNeon 1.5s infinite alternate;
 }
 
+.bubble-move-mode {
+  touch-action: none;
+}
+
+.bubble-resize-zone,
+.bubble-resize-handle {
+  touch-action: none;
+}
+
+.bubble-move-mode-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bubble-move-mode-button.active {
+  border-color: rgba(6, 182, 212, 0.65);
+  background: rgba(6, 182, 212, 0.2);
+  color: var(--accent-cyan);
+}
+
 @keyframes pulseNeon {
   0% { box-shadow: 0 0 0 2px var(--accent-cyan), 0 0 10px rgba(6, 182, 212, 0.4); }
   100% { box-shadow: 0 0 0 3px var(--accent-cyan), 0 0 25px rgba(6, 182, 212, 0.8); }
@@ -3248,6 +3280,61 @@ body {
   }
 }
 
+.pwa-install-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(6, 182, 212, 0.24);
+  border-radius: 8px;
+  background: rgba(6, 182, 212, 0.055);
+}
+
+.pwa-install-copy {
+  min-width: 0;
+}
+
+.pwa-install-title {
+  color: var(--text-main);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.pwa-install-description,
+.pwa-install-hint {
+  color: var(--text-dim);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.pwa-install-button {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
+.pwa-install-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: #34d399;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .pwa-install-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pwa-install-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 600px) {
   .playlist-library-backdrop {
     padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
@@ -3372,5 +3459,35 @@ body {
   .playlist-library-chapters {
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
+  }
+
+  .bubble-resize-corner {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  .bubble-resize-horizontal {
+    width: 36px !important;
+    height: 28px !important;
+  }
+
+  .bubble-resize-vertical {
+    width: 28px !important;
+    height: 36px !important;
+  }
+
+  .bubble-resize-zone-top,
+  .bubble-resize-zone-bottom {
+    height: 32px !important;
+  }
+
+  .bubble-resize-zone-left,
+  .bubble-resize-zone-right {
+    width: 32px !important;
+  }
+
+  .bubble-move-mode-button {
+    min-width: 44px;
+    min-height: 44px;
   }
 }

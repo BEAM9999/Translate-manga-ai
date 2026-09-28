@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Download,
@@ -19,12 +19,6 @@ import {
   Check,
   RefreshCw,
   FolderCheck,
-  Cloud,
-  CloudUpload,
-  CloudDownload,
-  LogOut,
-  ExternalLink,
-  ShieldCheck,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AppSettings, MangaPlaylist } from '../types';
@@ -43,23 +37,11 @@ import {
   RestoreOptions,
   RestoreResult,
 } from '../services/backupService';
-import {
-  signInWithGoogleDrive,
-  signOutGoogleDrive,
-  getStoredGoogleUser,
-  getLastSyncTimestamp,
-  uploadBackupToGoogleDrive,
-  restoreBackupFromGoogleDrive,
-  getGoogleDriveBackupInfo,
-  GoogleDriveUser,
-  GoogleDriveBackupInfo,
-  GOOGLE_DRIVE_FOLDER_NAME,
-} from '../services/googleDriveService';
 
 interface BackupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'export' | 'import' | 'cloud';
+  initialTab?: 'export' | 'import';
   currentSettings?: AppSettings;
   onSettingsRestored?: (newSettings: AppSettings) => void;
   onDataRestored?: () => void;
@@ -73,22 +55,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   onSettingsRestored,
   onDataRestored,
 }) => {
-  const [activeTab, setActiveTab] = useState<'export' | 'import' | 'cloud'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'export' | 'import'>(initialTab);
 
   // Export state
   const [exportPreview, setExportPreview] = useState<BackupDataBundle | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [exportIncludeImages, setExportIncludeImages] = useState(true);
-
-  // Google Drive state
-  const [googleUser, setGoogleUser] = useState<GoogleDriveUser | null>(() => getStoredGoogleUser());
-  const [isGoogleConnecting, setIsGoogleConnecting] = useState(false);
-  const [isGoogleSyncing, setIsGoogleSyncing] = useState(false);
-  const [isGoogleRestoring, setIsGoogleRestoring] = useState(false);
-  const [googleBackupInfo, setGoogleBackupInfo] = useState<GoogleDriveBackupInfo | null>(null);
-  const [googleMessage, setGoogleMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-  const [lastSyncTime, setLastSyncTime] = useState<number | null>(() => getLastSyncTimestamp());
 
   // Import state
   const [isParsing, setIsParsing] = useState(false);
@@ -112,106 +84,9 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       setExportMessage(null);
       setImportValidation(null);
       setRestoreResult(null);
-      setGoogleMessage(null);
       loadExportStats();
-      const user = getStoredGoogleUser();
-      setGoogleUser(user);
-      if (user) {
-        getGoogleDriveBackupInfo().then(info => setGoogleBackupInfo(info)).catch(() => {});
-      }
     }
   }, [isOpen, initialTab, currentSettings]);
-
-  // Google Drive Handlers
-  const handleConnectGoogle = async () => {
-    setIsGoogleConnecting(true);
-    setGoogleMessage(null);
-    try {
-      const user = await signInWithGoogleDrive();
-      setGoogleUser(user);
-      setGoogleMessage({
-        text: `เชื่อมต่อกับบัญชี Google สำเร็จ (${user.email})`,
-        type: 'success',
-      });
-      confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
-      const info = await getGoogleDriveBackupInfo();
-      setGoogleBackupInfo(info);
-    } catch (err) {
-      setGoogleMessage({
-        text: `เชื่อมต่อไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}`,
-        type: 'error',
-      });
-    } finally {
-      setIsGoogleConnecting(false);
-    }
-  };
-
-  const handleUploadToGoogle = async () => {
-    setIsGoogleSyncing(true);
-    setGoogleMessage(null);
-    try {
-      await uploadBackupToGoogleDrive(currentSettings, { includeImages: exportIncludeImages });
-      const now = Date.now();
-      setLastSyncTime(now);
-      setGoogleMessage({
-        text: `สำรองข้อมูลขึ้น Google Drive เรียบร้อยแล้ว (โฟลเดอร์ "${GOOGLE_DRIVE_FOLDER_NAME}")`,
-        type: 'success',
-      });
-      confetti({ particleCount: 60, spread: 70, origin: { y: 0.7 } });
-      const info = await getGoogleDriveBackupInfo();
-      setGoogleBackupInfo(info);
-    } catch (err) {
-      setGoogleMessage({
-        text: `สำรองขึ้น Google Drive ล้มเหลว: ${err instanceof Error ? err.message : String(err)}`,
-        type: 'error',
-      });
-    } finally {
-      setIsGoogleSyncing(false);
-    }
-  };
-
-  const handleRestoreFromGoogle = async () => {
-    if (!window.confirm('คุณต้องการนำเข้าข้อมูลและคำแปลจาก Google Drive มาบันทึกทับ/ผสานลงในเครื่องนี้ใช่หรือไม่?')) {
-      return;
-    }
-    setIsGoogleRestoring(true);
-    setGoogleMessage(null);
-    try {
-      const result = await restoreBackupFromGoogleDrive(
-        {
-          restoreSettings,
-          restorePlaylists,
-          playlistRestoreMode,
-          restoreWorkspaceDraft,
-        },
-        onSettingsRestored
-      );
-      setRestoreResult(result);
-      onDataRestored?.();
-      setGoogleMessage({
-        text: `กู้คืนข้อมูลจาก Google Drive สำเร็จ (Playlist ทั้งหมด: ${result.totalPlaylistsCount} เรื่อง, ตอนที่กู้คืน: ${result.chaptersRestoredCount} ตอน)`,
-        type: 'success',
-      });
-      confetti({ particleCount: 80, spread: 80, origin: { y: 0.7 } });
-    } catch (err) {
-      setGoogleMessage({
-        text: `ดึงข้อมูลจาก Google Drive ล้มเหลว: ${err instanceof Error ? err.message : String(err)}`,
-        type: 'error',
-      });
-    } finally {
-      setIsGoogleRestoring(false);
-    }
-  };
-
-  const handleSignOutGoogle = () => {
-    signOutGoogleDrive();
-    setGoogleUser(null);
-    setGoogleBackupInfo(null);
-    setGoogleMessage({
-      text: 'ออกจากระบบ Google Drive ในเครื่องนี้แล้ว',
-      type: 'success',
-    });
-  };
 
   const loadExportStats = async () => {
     try {
@@ -229,7 +104,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     setIsExporting(true);
     setExportMessage(null);
     try {
-      const filename = await exportBackupToZipFile(currentSettings, { includeImages: exportIncludeImages });
+      const filename = await exportBackupToZipFile(currentSettings);
       setExportMessage({
         text: `ดาวน์โหลดไฟล์ ZIP โฟลเดอร์สำรอง "${filename}" เรียบร้อยแล้ว`,
         type: 'success',
@@ -249,7 +124,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     setIsExporting(true);
     setExportMessage(null);
     try {
-      const filename = await exportBackupToJsonFile(currentSettings, { includeImages: exportIncludeImages });
+      const filename = await exportBackupToJsonFile(currentSettings);
       setExportMessage({
         text: `ดาวน์โหลดไฟล์ JSON สำรอง "${filename}" เรียบร้อยแล้ว`,
         type: 'success',
@@ -269,7 +144,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     setIsExporting(true);
     setExportMessage(null);
     try {
-      const result = await exportBackupToDirectory(currentSettings, { includeImages: exportIncludeImages });
+      const result = await exportBackupToDirectory(currentSettings);
       if (result.success) {
         setExportMessage({
           text: `บันทึกไฟล์และโครงสร้างโฟลเดอร์ทั้งหมดลงในโฟลเดอร์ "${result.folderName}" เรียบร้อยแล้ว`,
@@ -535,28 +410,6 @@ export const BackupModal: React.FC<BackupModalProps> = ({
             <FolderUp size={15} />
             <span>📥 นำเข้าข้อมูล (Import / Restore)</span>
           </button>
-
-          <button
-            onClick={() => setActiveTab('cloud')}
-            style={{
-              padding: '8px 18px',
-              borderRadius: '8px 8px 0 0',
-              border: 'none',
-              background: activeTab === 'cloud' ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
-              borderBottom: activeTab === 'cloud' ? '2px solid #3b82f6' : '2px solid transparent',
-              color: activeTab === 'cloud' ? '#60a5fa' : 'var(--text-dim)',
-              fontSize: '0.86rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.2s',
-            }}
-          >
-            <Cloud size={15} />
-            <span>☁️ ซิงค์ Google Drive (ฟรี 15 GB)</span>
-          </button>
         </div>
 
         {/* Body Content */}
@@ -673,47 +526,6 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                 </div>
               )}
 
-              {/* Export Configuration Option: Include Images */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '12px 16px',
-                  background: 'rgba(255,255,255,0.025)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: '10px',
-                  marginBottom: '14px',
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.84rem', fontWeight: 600, color: '#f8fafc' }}>
-                    <span>🖼️ รวมไฟล์รูปภาพหน้ามังงะต้นฉบับลงในไฟล์สำรอง</span>
-                    <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: exportIncludeImages ? 'rgba(52,211,153,0.15)' : 'rgba(148,163,184,0.15)', color: exportIncludeImages ? '#34d399' : '#94a3b8', borderRadius: '4px' }}>
-                      {exportIncludeImages ? 'สำรองภาพครบถ้วน' : 'สำรองเฉพาะคำแปล/คลังศัพท์ (เบาพิเศษ)'}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '3px', lineHeight: 1.4 }}>
-                    {exportIncludeImages
-                      ? '✓ แยกเก็บไฟล์ภาพเป็นไฟล์ไบนารีใน ZIP อย่างปลอดภัย ไม่ติดข้อจำกัดความยาวตัวอักษรของเบราว์เซอร์'
-                      : '✓ ไม่รวมรูปภาพต้นฉบับ สำรองเฉพาะคีย์ API, การตั้งค่า, คลังชื่อตัวละคร และตำแหน่งกล่องคำแปล (ไฟล์เบาหลัก KB โอนย้ายไวมาก)'}
-                  </div>
-                </div>
-                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '8px', flexShrink: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={exportIncludeImages}
-                    onChange={(e) => setExportIncludeImages(e.target.checked)}
-                    style={{
-                      width: '18px',
-                      height: '18px',
-                      accentColor: 'var(--accent-cyan)',
-                      cursor: 'pointer',
-                    }}
-                  />
-                </label>
-              </div>
-
               {/* Export Action Options */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {/* Option 1: Direct to Folder (File System Access) */}
@@ -828,7 +640,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                 </div>
               </div>
             </div>
-          ) : activeTab === 'import' ? (
+          ) : (
             <div>
               {/* Import View */}
               {/* Hidden Inputs */}
@@ -926,7 +738,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px' }}>
                     <AlertTriangle size={16} /> ไม่สามารถนำเข้าข้อมูลได้
                   </div>
-                  {importValidation.errors.map((err: string, i: number) => (
+                  {importValidation.errors.map((err, i) => (
                     <div key={i}>• {err}</div>
                   ))}
                   <button
@@ -1212,490 +1024,6 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                   >
                     เสร็จสิ้น
                   </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div>
-              {/* Google Drive Cloud Sync Tab */}
-              {/* Status Banner */}
-              {googleMessage && (
-                <div
-                  style={{
-                    padding: '12px 16px',
-                    borderRadius: '10px',
-                    marginBottom: '16px',
-                    fontSize: '0.85rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    background: googleMessage.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                    border: `1px solid ${googleMessage.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                    color: googleMessage.type === 'success' ? '#34d399' : '#f87171',
-                  }}
-                >
-                  {googleMessage.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-                  <span style={{ flex: 1 }}>{googleMessage.text}</span>
-                  <button
-                    onClick={() => setGoogleMessage(null)}
-                    style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: '2px' }}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              )}
-
-              {!googleUser ? (
-                /* Not Connected View */
-                <div
-                  style={{
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid rgba(59,130,246,0.3)',
-                    borderRadius: '14px',
-                    padding: '24px 20px',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '60px',
-                      height: '60px',
-                      borderRadius: '50%',
-                      background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(6,182,212,0.2))',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      margin: '0 auto 16px auto',
-                      color: '#60a5fa',
-                      border: '1px solid rgba(59,130,246,0.4)',
-                    }}
-                  >
-                    <Cloud size={32} />
-                  </div>
-
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', fontWeight: 800, color: '#ffffff' }}>
-                    ซิงค์ข้อมูลมังงะและคำแปลข้ามเครื่องด้วย Google Drive
-                  </h4>
-                  <p
-                    style={{
-                      margin: '0 auto 20px auto',
-                      maxWidth: '540px',
-                      fontSize: '0.84rem',
-                      color: 'var(--text-dim)',
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    เชื่อมต่อบัญชี Google ของคุณเพื่อสำรองข้อมูลและนำเข้าข้อมูลได้ฟรี 15 GB โดยข้อมูลจะถูกเก็บไว้ใน Google Drive ส่วนตัวของคุณ 100% ปลอดภัย ไม่ต้องเสียค่าบริการเซิร์ฟเวอร์ใดๆ
-                  </p>
-
-                  {/* Highlights Grid */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                      gap: '12px',
-                      textAlign: 'left',
-                      marginBottom: '24px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: '12px',
-                        background: 'rgba(255,255,255,0.03)',
-                        borderRadius: '10px',
-                        border: '1px solid rgba(255,255,255,0.06)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#38bdf8', fontWeight: 700, fontSize: '0.86rem', marginBottom: '4px' }}>
-                        <ShieldCheck size={16} /> เป็นส่วนตัว ปลอดภัย 100%
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', lineHeight: 1.4 }}>
-                        ขอสิทธิ์เฉพาะไฟล์ที่สร้างโดยเว็บนี้เท่านั้น ไม่สามารถเข้าถึงไฟล์ส่วนตัวอื่นๆ ใน Google Drive ของคุณได้
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        padding: '12px',
-                        background: 'rgba(255,255,255,0.03)',
-                        borderRadius: '10px',
-                        border: '1px solid rgba(255,255,255,0.06)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#34d399', fontWeight: 700, fontSize: '0.86rem', marginBottom: '4px' }}>
-                        <Database size={16} /> พื้นที่ฟรี 15 GB
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', lineHeight: 1.4 }}>
-                        ใช้โควต้าบัญชี Google ส่วนตัวของคุณ ไม่จำกัดจำนวนครั้ง และไม่มีค่าบริการรายเดือน
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        padding: '12px',
-                        background: 'rgba(255,255,255,0.03)',
-                        borderRadius: '10px',
-                        border: '1px solid rgba(255,255,255,0.06)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#c084fc', fontWeight: 700, fontSize: '0.86rem', marginBottom: '4px' }}>
-                        <RefreshCw size={16} /> ข้ามอุปกรณ์ได้ทันที
-                      </div>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', lineHeight: 1.4 }}>
-                        แปลบนคอมพิวเตอร์ แล้วเปิดมือถือหรือแท็บเล็ตดึงข้อมูลไปอ่านต่อได้ทุกที่
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Connect Button */}
-                  <button
-                    className="btn-primary"
-                    onClick={handleConnectGoogle}
-                    disabled={isGoogleConnecting}
-                    style={{
-                      background: 'linear-gradient(135deg, #3b82f6, #06b6d4)',
-                      padding: '12px 28px',
-                      fontSize: '0.95rem',
-                      fontWeight: 700,
-                      boxShadow: '0 4px 16px rgba(59,130,246,0.3)',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                    }}
-                  >
-                    {isGoogleConnecting ? (
-                      <>
-                        <Loader2 size={18} className="spin-animation" />
-                        <span>กำลังเชื่อมต่อกับ Google...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Cloud size={18} />
-                        <span>เชื่อมต่อบัญชี Google Drive (Sign in with Google)</span>
-                      </>
-                    )}
-                  </button>
-
-                  <div style={{ marginTop: '16px', fontSize: '0.74rem', color: 'var(--text-dim)' }}>
-                    💡 ระบบทำงานผ่าน Google Identity Services ปลอดภัยตามมาตรฐานสากล
-                  </div>
-                </div>
-              ) : (
-                /* Connected View */
-                <div>
-                  {/* User Profile Bar */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '14px 18px',
-                      background: 'rgba(59,130,246,0.08)',
-                      border: '1px solid rgba(59,130,246,0.25)',
-                      borderRadius: '12px',
-                      marginBottom: '18px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      {googleUser.picture ? (
-                        <img
-                          src={googleUser.picture}
-                          alt={googleUser.name}
-                          style={{
-                            width: '42px',
-                            height: '42px',
-                            borderRadius: '50%',
-                            border: '2px solid #3b82f6',
-                            objectFit: 'cover',
-                          }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            width: '42px',
-                            height: '42px',
-                            borderRadius: '50%',
-                            background: '#3b82f6',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#ffffff',
-                            fontWeight: 700,
-                            fontSize: '1.1rem',
-                          }}
-                        >
-                          {googleUser.name ? googleUser.name.charAt(0) : 'G'}
-                        </div>
-                      )}
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#ffffff' }}>
-                            {googleUser.name || 'ผู้ใช้ Google'}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: '0.68rem',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              background: 'rgba(16,185,129,0.2)',
-                              color: '#34d399',
-                              border: '1px solid rgba(16,185,129,0.4)',
-                              fontWeight: 600,
-                            }}
-                          >
-                            🟢 เชื่อมต่อแล้ว
-                          </span>
-                        </div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '2px' }}>
-                          {googleUser.email}
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      className="btn-secondary"
-                      onClick={handleSignOutGoogle}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: '0.78rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        color: '#f87171',
-                        borderColor: 'rgba(239,68,68,0.3)',
-                      }}
-                      title="ออกจากระบบ Google Drive ในเครื่องนี้"
-                    >
-                      <LogOut size={13} />
-                      <span>ออกจากระบบ</span>
-                    </button>
-                  </div>
-
-                  {/* Cloud Folder & Sync Status Box */}
-                  <div
-                    style={{
-                      background: 'rgba(255,255,255,0.02)',
-                      border: '1px solid rgba(255,255,255,0.07)',
-                      borderRadius: '12px',
-                      padding: '14px 18px',
-                      marginBottom: '18px',
-                      fontSize: '0.8rem',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#e2e8f0' }}>
-                        <Cloud size={16} color="#60a5fa" />
-                        <span>ปลายทางบน Google Drive: <b>{GOOGLE_DRIVE_FOLDER_NAME}</b></span>
-                      </div>
-                      <a
-                        href="https://drive.google.com/drive/my-drive"
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          color: '#60a5fa',
-                          fontSize: '0.74rem',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        <span>เปิด Drive</span>
-                        <ExternalLink size={12} />
-                      </a>
-                    </div>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', color: 'var(--text-dim)', fontSize: '0.76rem' }}>
-                      <div>
-                        ซิงค์ล่าสุดจากเครื่องนี้:{' '}
-                        <b style={{ color: lastSyncTime ? '#34d399' : 'var(--text-dim)' }}>
-                          {lastSyncTime ? new Date(lastSyncTime).toLocaleString('th-TH') : 'ยังไม่เคยซิงค์'}
-                        </b>
-                      </div>
-                      {googleBackupInfo?.exists && (
-                        <div>
-                          ขนาดไฟล์บนคลาวด์:{' '}
-                          <b style={{ color: '#38bdf8' }}>
-                            {googleBackupInfo.size ? `${(googleBackupInfo.size / (1024 * 1024)).toFixed(2)} MB` : 'ตรวจพบไฟล์'}
-                          </b>
-                          {googleBackupInfo.modifiedTime && (
-                            <span> (อัปเดตเมื่อ {new Date(googleBackupInfo.modifiedTime).toLocaleString('th-TH')})</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Image inclusion checkbox */}
-                    <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={exportIncludeImages}
-                          onChange={(e) => setExportIncludeImages(e.target.checked)}
-                          style={{ accentColor: '#3b82f6', width: '15px', height: '15px' }}
-                        />
-                        <span style={{ fontSize: '0.8rem', color: '#ffffff', fontWeight: 600 }}>
-                          รวมรูปภาพหน้ามังงะต้นฉบับขึ้น Google Drive (แนะนำ)
-                        </span>
-                      </label>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginLeft: '23px', marginTop: '2px' }}>
-                        รูปภาพจะถูกแยกเก็บเป็นไฟล์รูป binary ใน ZIP เพื่อการสำรองข้อมูลที่รวดเร็วและประหยัดพื้นที่
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 2 Main Action Cards */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginBottom: '18px' }}>
-                    {/* Action 1: Upload */}
-                    <div
-                      style={{
-                        padding: '18px',
-                        background: 'rgba(59,130,246,0.04)',
-                        border: '1px solid rgba(59,130,246,0.2)',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#60a5fa', fontWeight: 800, fontSize: '0.96rem', marginBottom: '6px' }}>
-                          <CloudUpload size={18} />
-                          <span>1. สำรองข้อมูลขึ้น Google Drive</span>
-                        </div>
-                        <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', lineHeight: 1.4, margin: '0 0 14px 0' }}>
-                          รวบรวมคลัง Playlist ทั้งหมด ({exportPreview?.playlists.length || 0} เรื่อง), ตอนมังงะ, คีย์ API และคำสั่งบริบทเรื่องจากเครื่องนี้ แล้วอัปโหลดไปเก็บที่ Google Drive
-                        </p>
-                      </div>
-
-                      <button
-                        className="btn-primary"
-                        onClick={handleUploadToGoogle}
-                        disabled={isGoogleSyncing || isGoogleRestoring}
-                        style={{
-                          background: 'linear-gradient(135deg, #3b82f6, #06b6d4)',
-                          width: '100%',
-                          padding: '10px 16px',
-                          fontSize: '0.86rem',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                        }}
-                      >
-                        {isGoogleSyncing ? (
-                          <>
-                            <Loader2 size={15} className="spin-animation" />
-                            <span>กำลังสำรองข้อมูลขึ้น Drive...</span>
-                          </>
-                        ) : (
-                          <>
-                            <CloudUpload size={15} />
-                            <span>สำรองข้อมูลขึ้นคลาวด์เดี๋ยวนี้</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Action 2: Restore */}
-                    <div
-                      style={{
-                        padding: '18px',
-                        background: 'rgba(16,185,129,0.04)',
-                        border: '1px solid rgba(16,185,129,0.2)',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#34d399', fontWeight: 800, fontSize: '0.96rem', marginBottom: '6px' }}>
-                          <CloudDownload size={18} />
-                          <span>2. กู้คืนข้อมูลจาก Google Drive</span>
-                        </div>
-                        <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', lineHeight: 1.4, margin: '0 0 10px 0' }}>
-                          ดึงข้อมูลและรูปภาพจาก Google Drive ล่าสุดลงมาบันทึกและผสานลงในเครื่องนี้ เพื่อให้สามารถอ่านและแปลต่อได้ทันที
-                        </p>
-
-                        {/* Options */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px', fontSize: '0.74rem' }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#cbd5e1' }}>
-                            <input
-                              type="radio"
-                              name="googlePlMode"
-                              checked={playlistRestoreMode === 'merge'}
-                              onChange={() => setPlaylistRestoreMode('merge')}
-                              style={{ accentColor: '#10b981' }}
-                            />
-                            <span>ผสานข้อมูลกับของเดิม (Merge - ข้อมูลเดิมไม่หาย)</span>
-                          </label>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#f87171' }}>
-                            <input
-                              type="radio"
-                              name="googlePlMode"
-                              checked={playlistRestoreMode === 'overwrite'}
-                              onChange={() => setPlaylistRestoreMode('overwrite')}
-                              style={{ accentColor: '#ef4444' }}
-                            />
-                            <span>แทนที่ทั้งหมดด้วยข้อมูลจากคลาวด์ (Overwrite)</span>
-                          </label>
-                        </div>
-                      </div>
-
-                      <button
-                        className="btn-primary"
-                        onClick={handleRestoreFromGoogle}
-                        disabled={isGoogleSyncing || isGoogleRestoring}
-                        style={{
-                          background: 'linear-gradient(135deg, #10b981, #06b6d4)',
-                          width: '100%',
-                          padding: '10px 16px',
-                          fontSize: '0.86rem',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px',
-                        }}
-                      >
-                        {isGoogleRestoring ? (
-                          <>
-                            <Loader2 size={15} className="spin-animation" />
-                            <span>กำลังดึงข้อมูลจาก Drive...</span>
-                          </>
-                        ) : (
-                          <>
-                            <CloudDownload size={15} />
-                            <span>ดึงข้อมูลจาก Google Drive ลงเครื่อง</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Restore Result Card if applicable */}
-                  {restoreResult && (
-                    <div
-                      style={{
-                        background: 'rgba(16,185,129,0.08)',
-                        border: '1px solid rgba(16,185,129,0.3)',
-                        borderRadius: '12px',
-                        padding: '16px',
-                        textAlign: 'center',
-                        marginBottom: '14px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', color: '#34d399', fontWeight: 800, fontSize: '0.95rem', marginBottom: '4px' }}>
-                        <Check size={18} />
-                        <span>กู้คืนข้อมูลจาก Google Drive สำเร็จเรียบร้อย!</span>
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: '#cbd5e1' }}>
-                        Playlist ทั้งหมด: {restoreResult.totalPlaylistsCount} เรื่อง | ตอนที่กู้คืน: {restoreResult.chaptersRestoredCount} ตอน
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </div>

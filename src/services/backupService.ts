@@ -2,7 +2,6 @@ import JSZip from 'jszip';
 import {
   AppSettings,
   MangaPlaylist,
-  MangaChapter,
   MangaPage,
   PlaylistMemoryEntry,
 } from '../types';
@@ -161,73 +160,6 @@ export async function gatherFullBackupBundle(
   };
 }
 
-export interface BackupExportOptions {
-  includeImages?: boolean;
-}
-
-export interface ExtractedBinaryImage {
-  data: Uint8Array;
-  mime: string;
-  ext: string;
-}
-
-/**
- * Parses a Data URL (base64) into raw binary Uint8Array without string expansion
- */
-export function parseDataUrl(dataUrl: string): ExtractedBinaryImage | null {
-  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
-    return null;
-  }
-  const commaIndex = dataUrl.indexOf(',');
-  if (commaIndex === -1) return null;
-
-  const header = dataUrl.slice(0, commaIndex);
-  const base64Data = dataUrl.slice(commaIndex + 1);
-  const mimeMatch = header.match(/data:([^;]+)/);
-  const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-  let ext = 'jpg';
-  if (mime.includes('png')) ext = 'png';
-  else if (mime.includes('webp')) ext = 'webp';
-  else if (mime.includes('gif')) ext = 'gif';
-  else if (mime.includes('svg')) ext = 'svg';
-
-  try {
-    const binaryStr = atob(base64Data);
-    const len = binaryStr.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryStr.charCodeAt(i);
-    }
-    return { data: bytes, mime, ext };
-  } catch (e) {
-    console.warn('Failed to decode data URL binary:', e);
-    return null;
-  }
-}
-
-/**
- * Creates a lightweight copy of the backup bundle without heavy image data
- */
-export function stripImagesFromBundle(bundle: BackupDataBundle): BackupDataBundle {
-  return {
-    ...bundle,
-    playlists: (bundle.playlists || []).map(p => ({
-      ...p,
-      chapters: (p.chapters || []).map(ch => ({
-        ...ch,
-        thumbnailUrl: '',
-        pages: (ch.pages || []).map(pg => ({
-          ...pg,
-          originalImageUrl: '',
-        })),
-      })),
-    })),
-    workspaceDraftPages: bundle.workspaceDraftPages
-      ? bundle.workspaceDraftPages.map(pg => ({ ...pg, originalImageUrl: '' }))
-      : null,
-  };
-}
-
 /**
  * Downloads a Blob or DataURL as a file in the browser
  */
@@ -243,14 +175,9 @@ export function triggerFileDownload(blob: Blob, filename: string): void {
 }
 
 /**
- * Generates an organized JSZip archive containing the complete backup folder structure.
- * Page images are extracted into separate binary files in the zip to prevent "Invalid string length" errors.
+ * Generates an organized JSZip archive containing the complete backup folder structure
  */
-export async function buildBackupZip(
-  bundle: BackupDataBundle,
-  options: BackupExportOptions = { includeImages: true }
-): Promise<JSZip> {
-  const includeImages = options.includeImages !== false;
+export async function buildBackupZip(bundle: BackupDataBundle): Promise<JSZip> {
   const zip = new JSZip();
 
   // 1. Root files
@@ -264,176 +191,93 @@ export async function buildBackupZip(
     zip.file('raw_keys_and_models.txt', bundle.rawSmartPasteText);
   }
 
+  // Consolidated playlists for instant 1-click parsing
+  zip.file('playlists.json', JSON.stringify(bundle.playlists, null, 2));
+
   if (bundle.homePlaylistContextId) {
     zip.file('home_playlist_context.txt', bundle.homePlaylistContextId);
   }
 
-  // Workspace Draft Pages
-  let processedDraftPages = bundle.workspaceDraftPages;
   if (bundle.workspaceDraftPages && bundle.workspaceDraftPages.length > 0) {
-    if (includeImages) {
-      const draftImagesFolder = zip.folder('draft_images');
-      processedDraftPages = bundle.workspaceDraftPages.map((page, idx) => {
-        const cleanPage = { ...page };
-        if (cleanPage.originalImageUrl) {
-          const parsed = parseDataUrl(cleanPage.originalImageUrl);
-          if (parsed && draftImagesFolder) {
-            const filename = `draft_${idx + 1}_${sanitizeFileName(cleanPage.id)}.${parsed.ext}`;
-            draftImagesFolder.file(filename, parsed.data, { binary: true });
-            cleanPage.originalImageUrl = `draft_images/${filename}`;
-          }
-        }
-        return cleanPage;
-      });
-    } else {
-      processedDraftPages = bundle.workspaceDraftPages.map(page => ({
-        ...page,
-        originalImageUrl: '',
-      }));
-    }
-    zip.file('workspace_draft.json', JSON.stringify(processedDraftPages, null, 2));
+    zip.file('workspace_draft.json', JSON.stringify(bundle.workspaceDraftPages, null, 2));
   }
 
-  // 2. Playlists & Chapters with separate binary images
+  // 2. Human-readable subfolders for each playlist
   const playlistsFolder = zip.folder('playlists');
-  const processedPlaylists: MangaPlaylist[] = [];
+  if (playlistsFolder) {
+    for (let i = 0; i < bundle.playlists.length; i++) {
+      const p = bundle.playlists[i];
+      const safeName = sanitizeFileName(p.name || `Playlist_${i + 1}`);
+      const plFolder = playlistsFolder.folder(`${safeName}_${p.id}`);
 
-  for (let i = 0; i < bundle.playlists.length; i++) {
-    const p = bundle.playlists[i];
-    const safeName = sanitizeFileName(p.name || `Playlist_${i + 1}`);
-    const plFolder = playlistsFolder ? playlistsFolder.folder(`${safeName}_${p.id}`) : null;
-    const imagesFolder = includeImages && plFolder ? plFolder.folder('images') : null;
+      if (plFolder) {
+        // Basic playlist info
+        plFolder.file(
+          'playlist_info.json',
+          JSON.stringify(
+            {
+              id: p.id,
+              name: p.name,
+              description: p.description,
+              createdAt: p.createdAt,
+              updatedAt: p.updatedAt,
+              chapterCount: p.chapters?.length || 0,
+              memoryEntriesCount: p.memoryEntries?.length || 0,
+            },
+            null,
+            2
+          )
+        );
 
-    // Process chapters
-    const processedChapters: MangaChapter[] = (p.chapters || []).map((ch, chIdx) => {
-      const cleanChapter: MangaChapter = {
-        ...ch,
-        pages: (ch.pages || []).map((page, pIdx) => {
-          const cleanPage: MangaPage = { ...page };
-          if (includeImages && cleanPage.originalImageUrl) {
-            const parsed = parseDataUrl(cleanPage.originalImageUrl);
-            if (parsed && imagesFolder) {
-              const imgFilename = `img_ch${chIdx + 1}_p${pIdx + 1}_${sanitizeFileName(cleanPage.id)}.${parsed.ext}`;
-              imagesFolder.file(imgFilename, parsed.data, { binary: true });
-              cleanPage.originalImageUrl = `images/${imgFilename}`;
-            }
-          } else if (!includeImages) {
-            cleanPage.originalImageUrl = '';
-          }
-          return cleanPage;
-        }),
-      };
-
-      if (includeImages && cleanChapter.thumbnailUrl) {
-        const parsedThumb = parseDataUrl(cleanChapter.thumbnailUrl);
-        if (parsedThumb && imagesFolder) {
-          const thumbFilename = `thumb_ch${chIdx + 1}_${sanitizeFileName(cleanChapter.id)}.${parsedThumb.ext}`;
-          imagesFolder.file(thumbFilename, parsedThumb.data, { binary: true });
-          cleanChapter.thumbnailUrl = `images/${thumbFilename}`;
+        // Story context instructions (plain text)
+        if (p.memoryInstructions) {
+          plFolder.file('context_instructions.txt', p.memoryInstructions);
         }
-      } else if (!includeImages) {
-        cleanChapter.thumbnailUrl = '';
-      }
 
-      return cleanChapter;
-    });
+        // Memory glossary (names, organizations, skills)
+        if (p.memoryEntries && p.memoryEntries.length > 0) {
+          plFolder.file('memory_glossary.json', JSON.stringify(p.memoryEntries, null, 2));
+        }
 
-    if (plFolder) {
-      // Basic playlist info
-      plFolder.file(
-        'playlist_info.json',
-        JSON.stringify(
-          {
-            id: p.id,
-            name: p.name,
-            description: p.description,
-            createdAt: p.createdAt,
-            updatedAt: p.updatedAt,
-            chapterCount: p.chapters?.length || 0,
-            memoryEntriesCount: p.memoryEntries?.length || 0,
-          },
-          null,
-          2
-        )
-      );
-
-      // Story context instructions (plain text)
-      if (p.memoryInstructions) {
-        plFolder.file('context_instructions.txt', p.memoryInstructions);
-      }
-
-      // Memory glossary (names, organizations, skills)
-      if (p.memoryEntries && p.memoryEntries.length > 0) {
-        plFolder.file('memory_glossary.json', JSON.stringify(p.memoryEntries, null, 2));
-      }
-
-      // Chapters with page data & bubble translations (clean with relative images)
-      if (processedChapters.length > 0) {
-        plFolder.file('chapters.json', JSON.stringify(processedChapters, null, 2));
+        // Chapters with page data & bubble translations
+        if (p.chapters && p.chapters.length > 0) {
+          plFolder.file('chapters.json', JSON.stringify(p.chapters, null, 2));
+        }
       }
     }
-
-    processedPlaylists.push({
-      ...p,
-      chapters: processedChapters,
-    });
   }
-
-  // Consolidated playlists for instant 1-click parsing (compact with relative paths)
-  zip.file('playlists.json', JSON.stringify(processedPlaylists, null, 2));
 
   return zip;
 }
 
 /**
- * Exports complete backup as a ZIP file (extracts into an organized folder).
- * Uses STORE compression so binary images do not trigger high CPU or V8 string allocation errors.
+ * Exports complete backup as a ZIP file (which extracts into an organized folder)
  */
-export async function exportBackupToZipFile(
-  currentSettings?: AppSettings,
-  options: BackupExportOptions = { includeImages: true }
-): Promise<string> {
+export async function exportBackupToZipFile(currentSettings?: AppSettings): Promise<string> {
   const bundle = await gatherFullBackupBundle(currentSettings);
-  const zip = await buildBackupZip(bundle, options);
+  const zip = await buildBackupZip(bundle);
   const blob = await zip.generateAsync({
     type: 'blob',
-    compression: 'STORE',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
   });
 
   const timestampStr = formatTimestampForFilename(bundle.manifest.createdAt);
-  const suffix = options.includeImages === false ? '_compact' : '';
-  const filename = `C2_Sub_Auto_AI_Backup_${timestampStr}${suffix}.zip`;
+  const filename = `C2_Sub_Auto_AI_Backup_${timestampStr}.zip`;
   triggerFileDownload(blob, filename);
   return filename;
 }
 
 /**
- * Exports backup as a single JSON file
+ * Exports complete backup as a single JSON file
  */
-export async function exportBackupToJsonFile(
-  currentSettings?: AppSettings,
-  options: BackupExportOptions = { includeImages: true }
-): Promise<string> {
+export async function exportBackupToJsonFile(currentSettings?: AppSettings): Promise<string> {
   const bundle = await gatherFullBackupBundle(currentSettings);
-  const targetBundle = options.includeImages === false ? stripImagesFromBundle(bundle) : bundle;
-
-  let jsonString: string;
-  try {
-    jsonString = JSON.stringify(targetBundle, null, 2);
-  } catch (err) {
-    try {
-      jsonString = JSON.stringify(targetBundle);
-    } catch {
-      throw new Error(
-        'ข้อมูลมีขนาดใหญ่เกินกว่าที่เบราว์เซอร์จะรวมเป็นไฟล์ JSON เดียวได้ (Invalid string length) กรุณาใช้ตัวเลือก "ดาวน์โหลดเป็นโฟลเดอร์ ZIP" หรือปิดตัวเลือก "รวมรูปภาพมังงะ"'
-      );
-    }
-  }
-
+  const jsonString = JSON.stringify(bundle, null, 2);
   const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8' });
+
   const timestampStr = formatTimestampForFilename(bundle.manifest.createdAt);
-  const suffix = options.includeImages === false ? '_compact' : '';
-  const filename = `C2_Sub_Auto_AI_Backup_${timestampStr}${suffix}.json`;
+  const filename = `C2_Sub_Auto_AI_Backup_${timestampStr}.json`;
   triggerFileDownload(blob, filename);
   return filename;
 }
@@ -449,8 +293,7 @@ export function isFileSystemAccessSupported(): boolean {
  * Exports complete backup directly into a folder selected by the user via File System Access API
  */
 export async function exportBackupToDirectory(
-  currentSettings?: AppSettings,
-  options: BackupExportOptions = { includeImages: true }
+  currentSettings?: AppSettings
 ): Promise<{ success: boolean; folderName?: string; error?: string }> {
   if (!isFileSystemAccessSupported()) {
     throw new Error('เบราว์เซอร์นี้ไม่รองรับ File System Access API กรุณาเลือกดาวน์โหลดเป็นไฟล์ ZIP');
@@ -467,8 +310,7 @@ export async function exportBackupToDirectory(
     });
 
     const timestampStr = formatTimestampForFilename(bundle.manifest.createdAt);
-    const suffix = options.includeImages === false ? '_compact' : '';
-    const backupFolderName = `C2_Backup_${timestampStr}${suffix}`;
+    const backupFolderName = `C2_Backup_${timestampStr}`;
     const backupDirHandle = await rootHandle.getDirectoryHandle(backupFolderName, { create: true });
 
     // Helper to write text/json file
@@ -478,16 +320,6 @@ export async function exportBackupToDirectory(
       await writable.write(content);
       await writable.close();
     };
-
-    // Helper to write binary data (image file)
-    const writeBinaryFile = async (dir: FileSystemDirectoryHandle, name: string, data: Uint8Array) => {
-      const fileHandle = await dir.getFileHandle(name, { create: true });
-      const writable = await fileHandle.createWritable();
-      await writable.write(data as unknown as BufferSource);
-      await writable.close();
-    };
-
-    const includeImages = options.includeImages !== false;
 
     // 1. Root files
     await writeFile(backupDirHandle, 'manifest.json', JSON.stringify(bundle.manifest, null, 2));
@@ -500,84 +332,22 @@ export async function exportBackupToDirectory(
       await writeFile(backupDirHandle, 'raw_keys_and_models.txt', bundle.rawSmartPasteText);
     }
 
+    await writeFile(backupDirHandle, 'playlists.json', JSON.stringify(bundle.playlists, null, 2));
+
     if (bundle.homePlaylistContextId) {
       await writeFile(backupDirHandle, 'home_playlist_context.txt', bundle.homePlaylistContextId);
     }
 
-    // Workspace Draft
-    let processedDraftPages = bundle.workspaceDraftPages;
     if (bundle.workspaceDraftPages && bundle.workspaceDraftPages.length > 0) {
-      if (includeImages) {
-        const draftImagesDir = await backupDirHandle.getDirectoryHandle('draft_images', { create: true });
-        processedDraftPages = [];
-        for (let idx = 0; idx < bundle.workspaceDraftPages.length; idx++) {
-          const page = bundle.workspaceDraftPages[idx];
-          const cleanPage = { ...page };
-          if (cleanPage.originalImageUrl) {
-            const parsed = parseDataUrl(cleanPage.originalImageUrl);
-            if (parsed) {
-              const filename = `draft_${idx + 1}_${sanitizeFileName(cleanPage.id)}.${parsed.ext}`;
-              await writeBinaryFile(draftImagesDir, filename, parsed.data);
-              cleanPage.originalImageUrl = `draft_images/${filename}`;
-            }
-          }
-          processedDraftPages.push(cleanPage);
-        }
-      } else {
-        processedDraftPages = bundle.workspaceDraftPages.map(page => ({ ...page, originalImageUrl: '' }));
-      }
-      await writeFile(backupDirHandle, 'workspace_draft.json', JSON.stringify(processedDraftPages, null, 2));
+      await writeFile(backupDirHandle, 'workspace_draft.json', JSON.stringify(bundle.workspaceDraftPages, null, 2));
     }
 
     // 2. Playlists subfolders
     const playlistsDirHandle = await backupDirHandle.getDirectoryHandle('playlists', { create: true });
-    const processedPlaylists: MangaPlaylist[] = [];
-
     for (let i = 0; i < bundle.playlists.length; i++) {
       const p = bundle.playlists[i];
       const safeName = sanitizeFileName(p.name || `Playlist_${i + 1}`);
       const plDirHandle = await playlistsDirHandle.getDirectoryHandle(`${safeName}_${p.id}`, { create: true });
-      const imagesDirHandle = includeImages ? await plDirHandle.getDirectoryHandle('images', { create: true }) : null;
-
-      const processedChapters: MangaChapter[] = [];
-      for (let chIdx = 0; chIdx < (p.chapters || []).length; chIdx++) {
-        const ch = p.chapters[chIdx];
-        const processedPages: MangaPage[] = [];
-
-        for (let pIdx = 0; pIdx < (ch.pages || []).length; pIdx++) {
-          const page = ch.pages[pIdx];
-          const cleanPage: MangaPage = { ...page };
-          if (includeImages && cleanPage.originalImageUrl) {
-            const parsed = parseDataUrl(cleanPage.originalImageUrl);
-            if (parsed && imagesDirHandle) {
-              const imgFilename = `img_ch${chIdx + 1}_p${pIdx + 1}_${sanitizeFileName(cleanPage.id)}.${parsed.ext}`;
-              await writeBinaryFile(imagesDirHandle, imgFilename, parsed.data);
-              cleanPage.originalImageUrl = `images/${imgFilename}`;
-            }
-          } else if (!includeImages) {
-            cleanPage.originalImageUrl = '';
-          }
-          processedPages.push(cleanPage);
-        }
-
-        const cleanChapter: MangaChapter = {
-          ...ch,
-          pages: processedPages,
-        };
-
-        if (includeImages && cleanChapter.thumbnailUrl) {
-          const parsedThumb = parseDataUrl(cleanChapter.thumbnailUrl);
-          if (parsedThumb && imagesDirHandle) {
-            const thumbFilename = `thumb_ch${chIdx + 1}_${sanitizeFileName(cleanChapter.id)}.${parsedThumb.ext}`;
-            await writeBinaryFile(imagesDirHandle, thumbFilename, parsedThumb.data);
-            cleanChapter.thumbnailUrl = `images/${thumbFilename}`;
-          }
-        } else if (!includeImages) {
-          cleanChapter.thumbnailUrl = '';
-        }
-
-        processedChapters.push(cleanChapter);
-      }
 
       await writeFile(
         plDirHandle,
@@ -605,17 +375,10 @@ export async function exportBackupToDirectory(
         await writeFile(plDirHandle, 'memory_glossary.json', JSON.stringify(p.memoryEntries, null, 2));
       }
 
-      if (processedChapters.length > 0) {
-        await writeFile(plDirHandle, 'chapters.json', JSON.stringify(processedChapters, null, 2));
+      if (p.chapters && p.chapters.length > 0) {
+        await writeFile(plDirHandle, 'chapters.json', JSON.stringify(p.chapters, null, 2));
       }
-
-      processedPlaylists.push({
-        ...p,
-        chapters: processedChapters,
-      });
     }
-
-    await writeFile(backupDirHandle, 'playlists.json', JSON.stringify(processedPlaylists, null, 2));
 
     return { success: true, folderName: backupFolderName };
   } catch (err: unknown) {
@@ -830,65 +593,6 @@ export async function parseBackupFromZip(
       } catch {}
     }
 
-    // Helper to resolve an image in the zip to a Data URL
-    const resolveZipImage = async (imagePath?: string, dirPath = ''): Promise<string> => {
-      if (!imagePath || imagePath.startsWith('data:') || imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-        return imagePath || '';
-      }
-      let file = zip.file(dirPath + imagePath);
-      if (!file) {
-        file = zip.file(imagePath);
-      }
-      if (!file) {
-        const basename = imagePath.split(/[/\\]/).pop();
-        if (basename) {
-          const matched = Object.keys(zip.files).find(k => k.endsWith('/' + basename) || k === basename);
-          if (matched) {
-            file = zip.file(matched);
-          }
-        }
-      }
-      if (file) {
-        try {
-          const ext = imagePath.split('.').pop()?.toLowerCase() || 'jpg';
-          const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'svg' ? 'image/svg+xml' : 'image/jpeg';
-          const b64 = await file.async('base64');
-          return `data:${mime};base64,${b64}`;
-        } catch {
-          return imagePath;
-        }
-      }
-      return imagePath;
-    };
-
-    // Rehydrate images for all playlists & chapters
-    for (const pl of playlists) {
-      const safeName = sanitizeFileName(pl.name || 'Playlist');
-      const dirPath = `playlists/${safeName}_${pl.id}/`;
-      if (Array.isArray(pl.chapters)) {
-        for (const ch of pl.chapters) {
-          if (ch.thumbnailUrl) {
-            ch.thumbnailUrl = await resolveZipImage(ch.thumbnailUrl, dirPath);
-          }
-          if (Array.isArray(ch.pages)) {
-            for (const page of ch.pages) {
-              if (page.originalImageUrl) {
-                page.originalImageUrl = await resolveZipImage(page.originalImageUrl, dirPath);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    if (Array.isArray(workspaceDraftPages)) {
-      for (const page of workspaceDraftPages) {
-        if (page.originalImageUrl) {
-          page.originalImageUrl = await resolveZipImage(page.originalImageUrl, '');
-        }
-      }
-    }
-
     const bundle: BackupDataBundle = {
       manifest: manifest || {
         appName: 'C2 Sub Auto AI',
@@ -1007,51 +711,6 @@ export async function parseBackupFromDirectoryFiles(files: FileList | File[]): P
     try {
       homePlaylistContextId = (await ctxFile.text()).trim();
     } catch {}
-  }
-
-  // Helper to resolve directory image into Data URL
-  const resolveDirectoryImage = async (imagePath?: string, dirPrefix = ''): Promise<string> => {
-    if (!imagePath || imagePath.startsWith('data:') || imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-      return imagePath || '';
-    }
-    const file = fileMap.get(dirPrefix + imagePath) || fileMap.get(imagePath) || fileMap.get(imagePath.split(/[/\\]/).pop() || '');
-    if (file) {
-      return new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : imagePath);
-        reader.onerror = () => resolve(imagePath);
-        reader.readAsDataURL(file);
-      });
-    }
-    return imagePath;
-  };
-
-  // Rehydrate images for all playlists & chapters
-  for (const pl of playlists) {
-    const safeName = sanitizeFileName(pl.name || 'Playlist');
-    const dirPrefix = `playlists/${safeName}_${pl.id}/`;
-    if (Array.isArray(pl.chapters)) {
-      for (const ch of pl.chapters) {
-        if (ch.thumbnailUrl) {
-          ch.thumbnailUrl = await resolveDirectoryImage(ch.thumbnailUrl, dirPrefix);
-        }
-        if (Array.isArray(ch.pages)) {
-          for (const page of ch.pages) {
-            if (page.originalImageUrl) {
-              page.originalImageUrl = await resolveDirectoryImage(page.originalImageUrl, dirPrefix);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  if (Array.isArray(workspaceDraftPages)) {
-    for (const page of workspaceDraftPages) {
-      if (page.originalImageUrl) {
-        page.originalImageUrl = await resolveDirectoryImage(page.originalImageUrl, '');
-      }
-    }
   }
 
   return validateBackupBundle({
