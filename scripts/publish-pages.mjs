@@ -10,6 +10,8 @@ const generatedRootFiles = ['index.html', 'logo.png', 'icon.ico', '.nojekyll'];
 await mkdir(projectRoot, { recursive: true });
 await rm(uploadDirectory, { recursive: true, force: true });
 await cp(distDirectory, uploadDirectory, { recursive: true, force: true });
+await cp(path.join(projectRoot, 'sw.js'), path.join(uploadDirectory, 'sw.js'), { force: true });
+await cp(path.join(projectRoot, 'registerSW.js'), path.join(uploadDirectory, 'registerSW.js'), { force: true });
 await rm(path.join(projectRoot, 'assets'), { recursive: true, force: true });
 
 for (const fileName of generatedRootFiles) {

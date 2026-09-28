@@ -60,14 +60,9 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
 
   // Drag & Resize Modes
   const [dragMode, setDragMode] = useState<'move' | ResizeHandleType | null>(null);
-  const [isMoveMode, setIsMoveMode] = useState(false);
   const latestBubbleRef = useRef<TextBubble>(bubble);
   const dragBubbleRef = useRef<TextBubble>(bubble);
   latestBubbleRef.current = bubble;
-
-  useEffect(() => {
-    if (!isActive) setIsMoveMode(false);
-  }, [isActive]);
 
   // Track rendered on-screen pixel size for 100% responsive font fitting
   const bubbleContainerRef = useRef<HTMLDivElement>(null);
@@ -132,17 +127,11 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
   const heightPct = Math.max(0.2, ((ymax - ymin) / 1000) * 100);
 
   // Helper to start Drag or Resize
-  const initDrag = (e: React.PointerEvent, mode: 'move' | ResizeHandleType) => {
+  const initDrag = (e: React.MouseEvent, mode: 'move' | ResizeHandleType) => {
     if (isEditing) return;
     if (e.button !== 0) return;
-    if (e.pointerType === 'touch' && mode === 'move' && !isMoveMode) return;
     e.stopPropagation();
     e.preventDefault();
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // Window-level pointer listeners remain as a fallback.
-    }
     onSelect();
 
     let dragBubble = latestBubbleRef.current;
@@ -176,11 +165,11 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
     };
   };
 
-  // Global pointer listeners support both mouse and touch drag/resize.
+  // Global MouseMove & MouseUp listener for 100% Free Unlocked Resizing
   useEffect(() => {
     if (!dragMode) return;
 
-    const handlePointerMove = (e: PointerEvent) => {
+    const handleMouseMove = (e: MouseEvent) => {
       const { clientX, clientY, initialBox, containerW, containerH } = dragStartRef.current;
       const [iYmin, iXmin, iYmax, iXmax] = initialBox;
 
@@ -235,7 +224,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
       onUpdateBubble(updatedObj);
     };
 
-    const handlePointerUp = () => {
+    const handleMouseUp = () => {
       setDragMode(null);
       if (dragStartRef.current.hasMoved || dragStartRef.current.createdDuplicate) {
         if (onCommitBubble) {
@@ -244,15 +233,13 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
       }
     };
 
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    window.addEventListener('pointercancel', handlePointerUp);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
     return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      window.removeEventListener('pointercancel', handlePointerUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragMode, isMoveMode, onUpdateBubble, onCommitBubble]);
+  }, [dragMode, onUpdateBubble, onCommitBubble]);
 
   // Keyboard shortcut: Press Enter or Escape to confirm/save & deselect
   useEffect(() => {
@@ -471,7 +458,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
     <>
       <div
         ref={bubbleContainerRef}
-        className={`manga-bubble-overlay ${isActive ? 'bubble-active' : ''} ${isMoveMode ? 'bubble-move-mode' : ''}`}
+        className={`manga-bubble-overlay ${isActive ? 'bubble-active' : ''}`}
         style={{
           top: `${topPct}%`,
           left: `${leftPct}%`,
@@ -482,10 +469,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
           userSelect: 'none',
           boxSizing: 'border-box',
         }}
-        onPointerDown={(e) => {
-          if ((e.target as HTMLElement).closest('button, textarea, input')) return;
-          initDrag(e, 'move');
-        }}
+        onMouseDown={(e) => initDrag(e, 'move')}
         onClick={(e) => {
           e.stopPropagation();
           onSelect();
@@ -536,8 +520,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
           <>
             {/* Top Edge Bar */}
             <div
-              className="bubble-resize-zone bubble-resize-zone-top"
-              onPointerDown={(e) => initDrag(e, 'n')}
+              onMouseDown={(e) => initDrag(e, 'n')}
               style={{
                 position: 'absolute',
                 top: -6,
@@ -552,8 +535,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
 
             {/* Bottom Edge Bar */}
             <div
-              className="bubble-resize-zone bubble-resize-zone-bottom"
-              onPointerDown={(e) => initDrag(e, 's')}
+              onMouseDown={(e) => initDrag(e, 's')}
               style={{
                 position: 'absolute',
                 bottom: -6,
@@ -568,8 +550,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
 
             {/* Left Edge Bar */}
             <div
-              className="bubble-resize-zone bubble-resize-zone-left"
-              onPointerDown={(e) => initDrag(e, 'w')}
+              onMouseDown={(e) => initDrag(e, 'w')}
               style={{
                 position: 'absolute',
                 top: 10,
@@ -584,8 +565,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
 
             {/* Right Edge Bar */}
             <div
-              className="bubble-resize-zone bubble-resize-zone-right"
-              onPointerDown={(e) => initDrag(e, 'e')}
+              onMouseDown={(e) => initDrag(e, 'e')}
               style={{
                 position: 'absolute',
                 top: 10,
@@ -605,8 +585,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
           <>
             {/* Top-Left (NW) */}
             <div
-              className="bubble-resize-handle bubble-resize-corner"
-              onPointerDown={(e) => initDrag(e, 'nw')}
+              onMouseDown={(e) => initDrag(e, 'nw')}
               style={{
                 position: 'absolute',
                 top: -6,
@@ -625,8 +604,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
 
             {/* Top-Center (N) */}
             <div
-              className="bubble-resize-handle bubble-resize-horizontal"
-              onPointerDown={(e) => initDrag(e, 'n')}
+              onMouseDown={(e) => initDrag(e, 'n')}
               style={{
                 position: 'absolute',
                 top: -6,
@@ -646,8 +624,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
 
             {/* Top-Right (NE) */}
             <div
-              className="bubble-resize-handle bubble-resize-corner"
-              onPointerDown={(e) => initDrag(e, 'ne')}
+              onMouseDown={(e) => initDrag(e, 'ne')}
               style={{
                 position: 'absolute',
                 top: -6,
@@ -666,8 +643,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
 
             {/* Middle-Right (E) */}
             <div
-              className="bubble-resize-handle bubble-resize-vertical"
-              onPointerDown={(e) => initDrag(e, 'e')}
+              onMouseDown={(e) => initDrag(e, 'e')}
               style={{
                 position: 'absolute',
                 top: '50%',
@@ -687,8 +663,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
 
             {/* Bottom-Right (SE) */}
             <div
-              className="bubble-resize-handle bubble-resize-corner"
-              onPointerDown={(e) => initDrag(e, 'se')}
+              onMouseDown={(e) => initDrag(e, 'se')}
               style={{
                 position: 'absolute',
                 bottom: -6,
@@ -707,8 +682,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
 
             {/* Bottom-Center (S) */}
             <div
-              className="bubble-resize-handle bubble-resize-horizontal"
-              onPointerDown={(e) => initDrag(e, 's')}
+              onMouseDown={(e) => initDrag(e, 's')}
               style={{
                 position: 'absolute',
                 bottom: -6,
@@ -728,8 +702,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
 
             {/* Bottom-Left (SW) */}
             <div
-              className="bubble-resize-handle bubble-resize-corner"
-              onPointerDown={(e) => initDrag(e, 'sw')}
+              onMouseDown={(e) => initDrag(e, 'sw')}
               style={{
                 position: 'absolute',
                 bottom: -6,
@@ -748,8 +721,7 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
 
             {/* Middle-Left (W) */}
             <div
-              className="bubble-resize-handle bubble-resize-vertical"
-              onPointerDown={(e) => initDrag(e, 'w')}
+              onMouseDown={(e) => initDrag(e, 'w')}
               style={{
                 position: 'absolute',
                 top: '50%',
@@ -884,20 +856,9 @@ export const BubbleOverlay: React.FC<BubbleOverlayProps> = ({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              className={`bubble-move-mode-button ${isMoveMode ? 'active' : ''}`}
-              aria-pressed={isMoveMode}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsMoveMode(current => !current);
-              }}
-              title={isMoveMode ? 'ปิดโหมดย้ายกรอบ' : 'เปิดโหมดย้าย: กดค้างแล้วลากกรอบไปตำแหน่งใหม่'}
-            >
-              <Move size={13} />
-              <span>{isMoveMode ? 'กำลังย้าย' : 'ย้าย'}</span>
-            </button>
+            <span title="คลิกค้างเพื่อย้ายตำแหน่ง, Alt + ลากเพื่อทำสำเนา, หรือลากขอบเพื่อยืดหด" style={{ color: 'var(--text-dim)', cursor: 'grab', display: 'flex', alignItems: 'center' }}>
+              <Move size={12} />
+            </span>
 
             <div style={{ width: '1px', height: '14px', background: 'rgba(255,255,255,0.15)' }} />
 

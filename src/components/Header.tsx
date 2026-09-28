@@ -14,7 +14,8 @@ import {
   Cpu,
   AlertCircle,
   BookOpen,
-  BookmarkPlus
+  BookmarkPlus,
+  Cloud,
 } from 'lucide-react';
 import { GeminiModelId, ViewMode, AiProvider, OpenRouterModelEntry } from '../types';
 import { GEMINI_MODELS } from '../data/models';
@@ -36,6 +37,7 @@ interface HeaderProps {
   openRouterApiKey: string;
   onOpenSettings: () => void;
   onOpenExport: () => void;
+  onOpenBackup?: (tab?: 'export' | 'import' | 'cloud') => void;
   onOpenPlaylist?: () => void;
   onOpenSaveToPlaylist?: () => void;
   onGoToHome?: () => void;
@@ -63,6 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
   openRouterApiKey,
   onOpenSettings,
   onOpenExport,
+  onOpenBackup,
   onOpenPlaylist,
   onOpenSaveToPlaylist,
   onGoToHome,
@@ -311,6 +314,23 @@ export const Header: React.FC<HeaderProps> = ({
           <Download size={14} />
           <span className="header-btn-label">ส่งออก</span>
         </button>
+
+        {/* Google Drive Cloud Sync Button */}
+        {onOpenBackup && (
+          <button 
+            className="btn-secondary header-btn"
+            onClick={() => onOpenBackup('cloud')}
+            title="ซิงค์และสำรองข้อมูลด้วย Google Drive (ฟรี 15 GB)"
+            style={{
+              borderColor: 'rgba(59, 130, 246, 0.4)',
+              color: '#60a5fa',
+              background: 'rgba(59, 130, 246, 0.08)',
+            }}
+          >
+            <Cloud size={14} />
+            <span className="header-btn-label">Google Drive</span>
+          </button>
+        )}
 
         {/* Settings Button */}
         <button 

@@ -3,6 +3,8 @@ import {
   BackupDataBundle,
   BACKUP_FORMAT_VERSION,
   buildBackupZip,
+  buildSingleChapterZip,
+  restoreSingleChapterZip,
   parseBackupFromJson,
   parseBackupFromZip,
   validateBackupBundle,
@@ -213,8 +215,43 @@ describe('backupService full export & import flow', () => {
     expect(parsed.bundle?.playlists).toHaveLength(1);
     expect(parsed.bundle?.playlists[0].name).toBe('Solo Leveling');
     expect(parsed.bundle?.playlists[0].chapters).toHaveLength(1);
+    expect(parsed.bundle?.playlists[0].chapters[0].pages).toHaveLength(1);
+    expect(parsed.bundle?.playlists[0].chapters[0].pages[0].originalImageUrl).toContain('data:image/png;base64,');
     expect(parsed.bundle?.playlists[0].memoryEntries).toHaveLength(1);
     expect(parsed.bundle?.playlists[0].memoryInstructions).toBe('ตัวละครเอกให้ใช้สรรพนามแบบกระชับ');
+  });
+
+  it('supports compact backup without images', async () => {
+    const bundle: BackupDataBundle = {
+      manifest: {
+        appName: 'C2 Sub Auto AI',
+        formatVersion: BACKUP_FORMAT_VERSION,
+        createdAt: Date.now(),
+        createdDateString: new Date().toLocaleString(),
+        stats: {
+          hasSettings: true,
+          geminiKeysCount: 1,
+          openRouterModelsCount: 1,
+          playlistsCount: 1,
+          totalChaptersCount: 1,
+          totalMemoriesCount: 1,
+          hasWorkspaceDraft: false,
+          workspaceDraftPagesCount: 0,
+        },
+      },
+      settings: mockSettings,
+      playlists: [mockPlaylist],
+      rawSmartPasteText: mockSettings.rawSmartPasteText,
+    };
+
+    const zip = await buildBackupZip(bundle, { includeImages: false });
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+    const parsed = await parseBackupFromZip(zipBlob);
+    expect(parsed.isValid).toBe(true);
+    expect(parsed.bundle?.playlists[0].chapters[0].pages[0].originalImageUrl).toBe('');
+    expect(parsed.bundle?.playlists[0].chapters[0].pages[0].ocrResults).toHaveLength(1);
+    expect(parsed.bundle?.playlists[0].chapters[0].pages[0].ocrResults[0].translated_text).toBe('สวัสดี');
   });
 
   it('parses backup from JSON string correctly', async () => {
@@ -244,5 +281,18 @@ describe('backupService full export & import flow', () => {
     expect(parsed.isValid).toBe(true);
     expect(parsed.bundle?.settings?.selectedModel).toBe('gemini-2.5-flash');
     expect(parsed.bundle?.playlists[0].name).toBe('Solo Leveling');
+  });
+
+  it('builds and restores a standalone single chapter zip package with streaming images', async () => {
+    const chapter = mockPlaylist.chapters[0];
+    const zipBlob = await buildSingleChapterZip(chapter, true);
+    expect(zipBlob.size).toBeGreaterThan(0);
+
+    const restored = await restoreSingleChapterZip(zipBlob);
+    expect(restored.id).toBe(chapter.id);
+    expect(restored.chapterTitle).toBe('ตอนที่ 1');
+    expect(restored.pages).toHaveLength(1);
+    expect(restored.pages[0].originalImageUrl).toContain('data:image/png;base64,');
+    expect(restored.pages[0].ocrResults?.[0].translated_text).toBe('สวัสดี');
   });
 });

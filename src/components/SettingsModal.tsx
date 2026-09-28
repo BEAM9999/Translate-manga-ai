@@ -36,8 +36,7 @@ import {
   Minimize2,
   RefreshCw,
   Archive,
-  HardDriveDownload,
-  Smartphone,
+  HardDriveDownload
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -47,11 +46,6 @@ interface SettingsModalProps {
   activePlaylistName?: string;
   onSaveSettings: (newSettings: AppSettings) => void | Promise<void>;
   onOpenBackup?: () => void;
-}
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -73,9 +67,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isPlayingTestVoice, setIsPlayingTestVoice] = useState(false);
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [isMemoryEditorExpanded, setIsMemoryEditorExpanded] = useState(false);
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isPwaInstalled, setIsPwaInstalled] = useState(false);
-  const [isAppleMobile, setIsAppleMobile] = useState(false);
   
   // Smart Import Textarea State (Persisted in settings.rawSmartPasteText)
   const [smartPasteText, setSmartPasteText] = useState(settings.rawSmartPasteText || '');
@@ -96,53 +87,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [isOpen, settings]);
 
-  useEffect(() => {
-    const updateInstalledState = () => {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
-        (navigator as Navigator & { standalone?: boolean }).standalone === true;
-      setIsPwaInstalled(isStandalone);
-      setIsAppleMobile(
-        /iPhone|iPad|iPod/.test(navigator.userAgent) ||
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-      );
-    };
-    const handleBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event as BeforeInstallPromptEvent);
-    };
-    const handleAppInstalled = () => {
-      setIsPwaInstalled(true);
-      setInstallPrompt(null);
-    };
-
-    updateInstalledState();
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener);
-    window.addEventListener('appinstalled', handleAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt as EventListener);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
-  }, []);
-
   if (!isOpen) return null;
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
-  };
-
-  const handleInstallPwa = async () => {
-    if (!installPrompt) return;
-
-    try {
-      await installPrompt.prompt();
-      const choice = await installPrompt.userChoice;
-      if (choice.outcome === 'accepted') setIsPwaInstalled(true);
-      setInstallPrompt(null);
-    } catch {
-      showToast('ติดตั้งไม่สำเร็จ ลองติดตั้งผ่านเมนูของเบราว์เซอร์');
-    }
   };
 
   const handleSave = async () => {
@@ -1112,34 +1061,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '6px' }}>
               ขนาดคำนวณจากข้อมูลของแอปใน localStorage และ IndexedDB เป็นค่าประมาณ ไม่รวมพื้นที่ของเว็บหรือไฟล์ Windows อื่น
-            </div>
-          </div>
-
-          <div className="settings-group pwa-install-section" style={{ marginTop: '12px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Smartphone size={14} color="var(--accent-cyan)" />
-              ติดตั้งแอปบนโทรศัพท์ / แท็บเล็ต
-            </label>
-            <div className="pwa-install-card">
-              <div className="pwa-install-copy">
-                <div className="pwa-install-title">C2 Sub Auto AI</div>
-                <div className="pwa-install-description">
-                  {isPwaInstalled
-                    ? 'ติดตั้งแล้ว แอปจะรับเวอร์ชันใหม่เมื่อเปิดใช้งานขณะออนไลน์'
-                    : isAppleMobile
-                      ? 'iPhone/iPad: เปิดเว็บนี้ใน Safari แตะ แชร์ แล้วเลือก “เพิ่มไปยังหน้าจอโฮม”'
-                      : 'ติดตั้งเป็นแอปจากเบราว์เซอร์ได้ และจะรับฟังก์ชัน/ไอคอนเวอร์ชันใหม่เมื่อออนไลน์'}
-                </div>
-              </div>
-              {isPwaInstalled ? (
-                <span className="pwa-install-status"><CheckCircle2 size={14} /> ติดตั้งแล้ว</span>
-              ) : installPrompt ? (
-                <button type="button" className="btn-primary pwa-install-button" onClick={handleInstallPwa}>
-                  <Smartphone size={15} /> ติดตั้งแอป
-                </button>
-              ) : !isAppleMobile ? (
-                <span className="pwa-install-hint">Chrome/Edge: เมนู ⋮ → ติดตั้งแอป</span>
-              ) : null}
             </div>
           </div>
 
