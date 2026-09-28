@@ -61,6 +61,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   const [exportPreview, setExportPreview] = useState<BackupDataBundle | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [exportIncludeImages, setExportIncludeImages] = useState(true);
 
   // Import state
   const [isParsing, setIsParsing] = useState(false);
@@ -104,7 +105,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     setIsExporting(true);
     setExportMessage(null);
     try {
-      const filename = await exportBackupToZipFile(currentSettings);
+      const filename = await exportBackupToZipFile(currentSettings, { includeImages: exportIncludeImages });
       setExportMessage({
         text: `ดาวน์โหลดไฟล์ ZIP โฟลเดอร์สำรอง "${filename}" เรียบร้อยแล้ว`,
         type: 'success',
@@ -124,7 +125,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     setIsExporting(true);
     setExportMessage(null);
     try {
-      const filename = await exportBackupToJsonFile(currentSettings);
+      const filename = await exportBackupToJsonFile(currentSettings, { includeImages: exportIncludeImages });
       setExportMessage({
         text: `ดาวน์โหลดไฟล์ JSON สำรอง "${filename}" เรียบร้อยแล้ว`,
         type: 'success',
@@ -144,7 +145,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     setIsExporting(true);
     setExportMessage(null);
     try {
-      const result = await exportBackupToDirectory(currentSettings);
+      const result = await exportBackupToDirectory(currentSettings, { includeImages: exportIncludeImages });
       if (result.success) {
         setExportMessage({
           text: `บันทึกไฟล์และโครงสร้างโฟลเดอร์ทั้งหมดลงในโฟลเดอร์ "${result.folderName}" เรียบร้อยแล้ว`,
@@ -525,6 +526,47 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                   <span>{exportMessage.text}</span>
                 </div>
               )}
+
+              {/* Export Configuration Option: Include Images */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  background: 'rgba(255,255,255,0.025)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '10px',
+                  marginBottom: '14px',
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.84rem', fontWeight: 600, color: '#f8fafc' }}>
+                    <span>🖼️ รวมไฟล์รูปภาพหน้ามังงะต้นฉบับลงในไฟล์สำรอง</span>
+                    <span style={{ fontSize: '0.7rem', padding: '2px 6px', background: exportIncludeImages ? 'rgba(52,211,153,0.15)' : 'rgba(148,163,184,0.15)', color: exportIncludeImages ? '#34d399' : '#94a3b8', borderRadius: '4px' }}>
+                      {exportIncludeImages ? 'สำรองภาพครบถ้วน' : 'สำรองเฉพาะคำแปล/คลังศัพท์ (เบาพิเศษ)'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '3px', lineHeight: 1.4 }}>
+                    {exportIncludeImages
+                      ? '✓ แยกเก็บไฟล์ภาพเป็นไฟล์ไบนารีใน ZIP อย่างปลอดภัย ไม่ติดข้อจำกัดความยาวตัวอักษรของเบราว์เซอร์'
+                      : '✓ ไม่รวมรูปภาพต้นฉบับ สำรองเฉพาะคีย์ API, การตั้งค่า, คลังชื่อตัวละคร และตำแหน่งกล่องคำแปล (ไฟล์เบาหลัก KB โอนย้ายไวมาก)'}
+                  </div>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '8px', flexShrink: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={exportIncludeImages}
+                    onChange={(e) => setExportIncludeImages(e.target.checked)}
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      accentColor: 'var(--accent-cyan)',
+                      cursor: 'pointer',
+                    }}
+                  />
+                </label>
+              </div>
 
               {/* Export Action Options */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
